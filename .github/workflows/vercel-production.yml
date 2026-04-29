@@ -1,0 +1,11 @@
+name: Vercel Production Check
+
+on:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "Configure Vercel project checks after connecting the production deployment."

@@ -13,7 +13,7 @@ from typing import Any
 
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
+from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, Field
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -25,7 +25,7 @@ from backend.mcp.tools import TOOL_REGISTRY, export_complaints_csv, generate_man
 from backend.runtime_config import config_value
 from backend.session_store import get_session_state, record_session_turn
 from backend.store import active_store_backend, import_complaints_csv, list_audit_events, now_iso, record_audit_event
-from backend.telemetry import recent_spans, telemetry_status, traced_span
+from backend.telemetry import langfuse_flush, langfuse_trace, recent_spans, telemetry_status, traced_span
 
 MAX_MESSAGE_LENGTH = 1200
 BLOCKED_PHRASES = [
@@ -36,6 +36,16 @@ BLOCKED_PHRASES = [
     "exfiltrate",
     "system prompt",
 ]
+
+
+def estimate_tokens(text: str) -> int:
+    """Estimate token count - approximate using word + char divided by 4."""
+    if not text:
+        return 0
+    words = len(text.split())
+    chars = len(text)
+    # Rough approximation: avg 4 chars per token
+    return max(1, (words + chars) // 4)
 
 
 def auth_secret() -> str:
@@ -94,6 +104,7 @@ class ChatResponse(BaseModel):
     traceId: str
     latencyMs: int
     sessionId: str
+    tokenCount: int = 0
     discoveredTools: list[dict[str, Any]] = Field(default_factory=list)
 
 
@@ -356,10 +367,25 @@ async def chat(payload: ChatRequest, authorization: str | None = Header(default=
     message = payload.message.strip()
     if not message:
         raise HTTPException(status_code=422, detail="Message is required.")
+    
+    # Send to Langfuse for full observability if configured
+    langfuse_trace(
+        name="chat.request",
+        trace_id=trace_id,
+        input_text=message,
+        metadata={"session_id": payload.sessionId},
+        start_time=start,
+    )
+    
     tool, discovered = select_tool(message, payload.sessionId)
     with traced_span("chat.request", trace_id, {"session.id": payload.sessionId, "tool.selected": tool}):
         source, mcp_server, connection, response = run_selected_tool(tool, trace_id)
+    
     latency_ms = int((time.perf_counter() - start) * 1000)
+    
+    # Estimate token count
+    token_count = estimate_tokens(message) + estimate_tokens(response)
+    
     record_session_turn(payload.sessionId, message, tool)
     record_chat_event(
         tool=tool,
@@ -370,6 +396,10 @@ async def chat(payload: ChatRequest, authorization: str | None = Header(default=
         latency_ms=latency_ms,
         guarded=tool == "security_guardrail",
     )
+    
+    # Flush Langfuse
+    langfuse_flush()
+    
     return ChatResponse(
         response=response,
         tool=tool,
@@ -379,7 +409,73 @@ async def chat(payload: ChatRequest, authorization: str | None = Header(default=
         traceId=trace_id,
         latencyMs=latency_ms,
         sessionId=payload.sessionId,
+        tokenCount=token_count,
         discoveredTools=discovered[:3],
+    )
+
+
+async def generate_chat_stream(response_text: str, tool: str, mcp_server: str, connection: str, source: str, trace_id: str, latency_ms: int, session_id: str, token_count: int, discovered_tools: list[dict[str, Any]]):
+    """Generate streaming response with SSE."""
+    import json
+    import asyncio
+    
+    # Stream the response in chunks
+    words = response_text.split()
+    for i, word in enumerate(words):
+        chunk = word + (" " if i < len(words) - 1 else "")
+        yield f"data: {json.dumps({'chunk': chunk, 'type': 'content'})}\n\n"
+        await asyncio.sleep(0.02)  # Simulate streaming delay
+    
+    # Send final metadata
+    yield f"data: {json.dumps({'type': 'done', 'tool': tool, 'mcpServer': mcp_server, 'connection': connection, 'source': source, 'traceId': trace_id, 'latencyMs': latency_ms, 'sessionId': session_id, 'tokenCount': token_count, 'discoveredTools': discovered_tools})}\n\n"
+
+
+@app.post("/api/chat/stream")
+async def chat_stream(payload: ChatRequest, authorization: str | None = Header(default=None)) -> StreamingResponse:
+    if manager_workspace_auth_required():
+        require_manager(authorization)
+    start = time.perf_counter()
+    trace_id = str(uuid.uuid4())
+    message = payload.message.strip()
+    if not message:
+        raise HTTPException(status_code=422, detail="Message is required.")
+    
+    # Send to Langfuse for full observability if configured
+    langfuse_trace(
+        name="chat.stream.request",
+        trace_id=trace_id,
+        input_text=message,
+        metadata={"session_id": payload.sessionId, "streaming": True},
+        start_time=start,
+    )
+    
+    tool, discovered = select_tool(message, payload.sessionId)
+    with traced_span("chat.stream.request", trace_id, {"session.id": payload.sessionId, "tool.selected": tool}):
+        source, mcp_server, connection, response = run_selected_tool(tool, trace_id)
+    
+    latency_ms = int((time.perf_counter() - start) * 1000)
+    
+    # Estimate token count
+    token_count = estimate_tokens(message) + estimate_tokens(response)
+    
+    record_session_turn(payload.sessionId, message, tool)
+    record_chat_event(
+        tool=tool,
+        source=source,
+        mcp_server=mcp_server,
+        connection=connection,
+        trace_id=trace_id,
+        latency_ms=latency_ms,
+        guarded=tool == "security_guardrail",
+    )
+    
+    # Flush Langfuse
+    langfuse_flush()
+    
+    return StreamingResponse(
+        generate_chat_stream(response, tool, mcp_server, connection, source, trace_id, latency_ms, payload.sessionId, token_count, discovered[:3]),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
 

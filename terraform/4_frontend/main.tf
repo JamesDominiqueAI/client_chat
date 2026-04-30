@@ -14,13 +14,8 @@ provider "aws" {
 }
 
 locals {
-  frontend_bucket_name  = coalesce(var.frontend_bucket_name, "${var.project_name}-frontend-${data.aws_caller_identity.current.account_id}")
-  slack_webhook_enabled = trimspace(var.slack_webhook_url) != ""
-  ssm_parameter_arns = compact([
-    aws_ssm_parameter.manager_password.arn,
-    aws_ssm_parameter.manager_auth_secret.arn,
-    local.slack_webhook_enabled ? aws_ssm_parameter.slack_webhook_url[0].arn : ""
-  ])
+  frontend_bucket_name     = coalesce(var.frontend_bucket_name, "${var.project_name}-frontend-${data.aws_caller_identity.current.account_id}")
+  slack_webhook_enabled    = trimspace(var.slack_webhook_url) != ""
   slack_webhook_param_name = local.slack_webhook_enabled ? aws_ssm_parameter.slack_webhook_url[0].name : ""
 }
 
@@ -67,40 +62,14 @@ resource "aws_iam_role_policy_attachment" "api_lambda_basic" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
-data "aws_iam_policy_document" "api_lambda_runtime" {
-  statement {
-    effect = "Allow"
-    actions = [
-      "dynamodb:BatchWriteItem",
-      "dynamodb:DeleteItem",
-      "dynamodb:GetItem",
-      "dynamodb:PutItem",
-      "dynamodb:Scan",
-      "dynamodb:UpdateItem"
-    ]
-    resources = [
-      var.complaints_table_arn,
-      var.audit_table_arn
-    ]
-  }
-
-  statement {
-    effect = "Allow"
-    actions = [
-      "ssm:GetParameter"
-    ]
-    resources = local.ssm_parameter_arns
-  }
-}
-
-resource "aws_iam_policy" "api_lambda_runtime" {
-  name   = "${var.project_name}-api-lambda-runtime"
-  policy = data.aws_iam_policy_document.api_lambda_runtime.minified_json
-}
-
 resource "aws_iam_role_policy_attachment" "api_lambda_runtime" {
   role       = aws_iam_role.api_lambda.name
-  policy_arn = aws_iam_policy.api_lambda_runtime.arn
+  policy_arn = "arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess"
+}
+
+resource "aws_iam_role_policy_attachment" "api_lambda_ssm_read" {
+  role       = aws_iam_role.api_lambda.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMReadOnlyAccess"
 }
 
 resource "aws_lambda_function" "api" {

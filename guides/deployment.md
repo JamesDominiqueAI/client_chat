@@ -59,18 +59,19 @@ The repo uses separate workflows, modeled after `digital_twin`:
 
 Required GitHub secrets and environment configuration:
 
-- shared or repeated values
-  - `DEFAULT_AWS_REGION`
-  - `TERRAFORM_STATE_BUCKET`
-  - `TERRAFORM_LOCK_TABLE`
 - development environment
-  - `AWS_ROLE_ARN`
   - `MANAGER_PASSWORD`
   - `MANAGER_AUTH_SECRET`
 - production environment
-  - `AWS_ROLE_ARN`
   - `MANAGER_PASSWORD`
   - `MANAGER_AUTH_SECRET`
+
+Required GitHub secret or variable values:
+
+- `AWS_ROLE_ARN`
+- `DEFAULT_AWS_REGION`
+- `TERRAFORM_STATE_BUCKET`
+- `TERRAFORM_LOCK_TABLE`
 
 Remote state matters here. The deploy and destroy workflows run on fresh GitHub-hosted runners, so Terraform state must live in S3 with DynamoDB locking instead of staying local to the runner.
 

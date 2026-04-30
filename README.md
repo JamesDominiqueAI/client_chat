@@ -175,18 +175,11 @@ Behavior:
 Required GitHub environment secrets:
 
 - `development`
-  - `AWS_ROLE_ARN`
-  - `DEFAULT_AWS_REGION`
   - `MANAGER_PASSWORD`
   - `MANAGER_AUTH_SECRET`
 - `production`
-  - `AWS_ROLE_ARN`
-  - `DEFAULT_AWS_REGION`
   - `MANAGER_PASSWORD`
   - `MANAGER_AUTH_SECRET`
-- shared
-  - `TERRAFORM_STATE_BUCKET`
-  - `TERRAFORM_LOCK_TABLE`
 
 The deploy and destroy workflows use remote Terraform state in S3 plus a DynamoDB lock table. Without those two secrets, GitHub-hosted deploy and destroy runs will not work reliably across fresh runners.
 
@@ -194,6 +187,13 @@ Optional environment secrets:
 
 - `SLACK_WEBHOOK_URL`
 - `ALARM_EMAIL`
+
+Required GitHub environment or repository secrets/variables:
+
+- `AWS_ROLE_ARN`
+- `DEFAULT_AWS_REGION`
+- `TERRAFORM_STATE_BUCKET`
+- `TERRAFORM_LOCK_TABLE`
 
 Deployment names are convention-based:
 

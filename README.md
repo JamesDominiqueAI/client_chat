@@ -175,15 +175,15 @@ Behavior:
 Required GitHub environment secrets:
 
 - `development`
-  - `AWS_ROLE_ARN_DEV`
+  - `AWS_ROLE_ARN`
   - `DEFAULT_AWS_REGION`
-  - `PROJECT_NAME_DEV`
-  - `COMPLAINTS_TABLE_NAME_DEV`
-  - `AUDIT_TABLE_NAME_DEV`
-  - `MANAGER_PASSWORD_DEV`
-  - `MANAGER_AUTH_SECRET_DEV`
-  - `SLACK_WEBHOOK_URL_DEV`
-  - `ALARM_EMAIL_DEV`
+  - `PROJECT_NAME`
+  - `COMPLAINTS_TABLE_NAME`
+  - `AUDIT_TABLE_NAME`
+  - `MANAGER_PASSWORD`
+  - `MANAGER_AUTH_SECRET`
+  - `SLACK_WEBHOOK_URL`
+  - `ALARM_EMAIL`
 - `production`
   - `AWS_ROLE_ARN`
   - `DEFAULT_AWS_REGION`
@@ -199,6 +199,8 @@ Required GitHub environment secrets:
   - `TERRAFORM_LOCK_TABLE`
 
 The deploy and destroy workflows use remote Terraform state in S3 plus a DynamoDB lock table. Without those two secrets, GitHub-hosted deploy and destroy runs will not work reliably across fresh runners.
+
+Legacy `*_DEV` secret names are still accepted as fallback, but the preferred model now matches `digital_twin`: use the same secret names in each GitHub environment.
 
 ## Demo Prompts
 

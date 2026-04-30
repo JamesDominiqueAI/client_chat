@@ -42,54 +42,54 @@ jobs:
         id: deploy_config
         env:
           TARGET_ENVIRONMENT: ${{ github.event.inputs.environment || 'development' }}
-          ROLE_ARN_DEV: ${{ secrets.AWS_ROLE_ARN_DEV }}
-          ROLE_ARN_PROD: ${{ secrets.AWS_ROLE_ARN }}
+          ROLE_ARN_ENV: ${{ secrets.AWS_ROLE_ARN }}
+          ROLE_ARN_DEV_LEGACY: ${{ secrets.AWS_ROLE_ARN_DEV }}
           AWS_REGION_PRIMARY: ${{ secrets.DEFAULT_AWS_REGION }}
-          PROJECT_NAME_DEV: ${{ secrets.PROJECT_NAME_DEV }}
-          PROJECT_NAME_PROD: ${{ secrets.PROJECT_NAME }}
-          COMPLAINTS_TABLE_DEV: ${{ secrets.COMPLAINTS_TABLE_NAME_DEV }}
-          COMPLAINTS_TABLE_PROD: ${{ secrets.COMPLAINTS_TABLE_NAME }}
-          AUDIT_TABLE_DEV: ${{ secrets.AUDIT_TABLE_NAME_DEV }}
-          AUDIT_TABLE_PROD: ${{ secrets.AUDIT_TABLE_NAME }}
-          MANAGER_PASSWORD_DEV: ${{ secrets.MANAGER_PASSWORD_DEV }}
-          MANAGER_PASSWORD_PROD: ${{ secrets.MANAGER_PASSWORD }}
-          MANAGER_AUTH_SECRET_DEV: ${{ secrets.MANAGER_AUTH_SECRET_DEV }}
-          MANAGER_AUTH_SECRET_PROD: ${{ secrets.MANAGER_AUTH_SECRET }}
-          SLACK_WEBHOOK_DEV: ${{ secrets.SLACK_WEBHOOK_URL_DEV }}
-          SLACK_WEBHOOK_PROD: ${{ secrets.SLACK_WEBHOOK_URL }}
-          ALARM_EMAIL_DEV: ${{ secrets.ALARM_EMAIL_DEV }}
-          ALARM_EMAIL_PROD: ${{ secrets.ALARM_EMAIL }}
+          PROJECT_NAME_ENV: ${{ secrets.PROJECT_NAME }}
+          PROJECT_NAME_DEV_LEGACY: ${{ secrets.PROJECT_NAME_DEV }}
+          COMPLAINTS_TABLE_ENV: ${{ secrets.COMPLAINTS_TABLE_NAME }}
+          COMPLAINTS_TABLE_DEV_LEGACY: ${{ secrets.COMPLAINTS_TABLE_NAME_DEV }}
+          AUDIT_TABLE_ENV: ${{ secrets.AUDIT_TABLE_NAME }}
+          AUDIT_TABLE_DEV_LEGACY: ${{ secrets.AUDIT_TABLE_NAME_DEV }}
+          MANAGER_PASSWORD_ENV: ${{ secrets.MANAGER_PASSWORD }}
+          MANAGER_PASSWORD_DEV_LEGACY: ${{ secrets.MANAGER_PASSWORD_DEV }}
+          MANAGER_AUTH_SECRET_ENV: ${{ secrets.MANAGER_AUTH_SECRET }}
+          MANAGER_AUTH_SECRET_DEV_LEGACY: ${{ secrets.MANAGER_AUTH_SECRET_DEV }}
+          SLACK_WEBHOOK_ENV: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_DEV_LEGACY: ${{ secrets.SLACK_WEBHOOK_URL_DEV }}
+          ALARM_EMAIL_ENV: ${{ secrets.ALARM_EMAIL }}
+          ALARM_EMAIL_DEV_LEGACY: ${{ secrets.ALARM_EMAIL_DEV }}
           TF_STATE_BUCKET_VALUE: ${{ secrets.TERRAFORM_STATE_BUCKET }}
           TF_LOCK_TABLE_VALUE: ${{ secrets.TERRAFORM_LOCK_TABLE }}
         run: |
           aws_region="${AWS_REGION_PRIMARY:-us-east-1}"
 
           if [[ "${TARGET_ENVIRONMENT}" == "development" ]]; then
-            role_arn="${ROLE_ARN_DEV:-${ROLE_ARN_PROD:-}}"
-            project_name="${PROJECT_NAME_DEV:-client-chat-dev}"
-            complaints_table="${COMPLAINTS_TABLE_DEV:-client-chat-dev-complaints}"
-            audit_table="${AUDIT_TABLE_DEV:-client-chat-dev-audit}"
-            manager_password="${MANAGER_PASSWORD_DEV:-}"
-            manager_auth_secret="${MANAGER_AUTH_SECRET_DEV:-}"
-            slack_webhook="${SLACK_WEBHOOK_DEV:-}"
-            alarm_email="${ALARM_EMAIL_DEV:-}"
+            role_arn="${ROLE_ARN_ENV:-${ROLE_ARN_DEV_LEGACY:-}}"
+            project_name="${PROJECT_NAME_ENV:-${PROJECT_NAME_DEV_LEGACY:-client-chat-dev}}"
+            complaints_table="${COMPLAINTS_TABLE_ENV:-${COMPLAINTS_TABLE_DEV_LEGACY:-client-chat-dev-complaints}}"
+            audit_table="${AUDIT_TABLE_ENV:-${AUDIT_TABLE_DEV_LEGACY:-client-chat-dev-audit}}"
+            manager_password="${MANAGER_PASSWORD_ENV:-${MANAGER_PASSWORD_DEV_LEGACY:-}}"
+            manager_auth_secret="${MANAGER_AUTH_SECRET_ENV:-${MANAGER_AUTH_SECRET_DEV_LEGACY:-}}"
+            slack_webhook="${SLACK_WEBHOOK_ENV:-${SLACK_WEBHOOK_DEV_LEGACY:-}}"
+            alarm_email="${ALARM_EMAIL_ENV:-${ALARM_EMAIL_DEV_LEGACY:-}}"
             session_name="client-chat-dev-github-actions"
             missing_secret_hint="development environment"
           else
-            role_arn="${ROLE_ARN_PROD:-}"
-            project_name="${PROJECT_NAME_PROD:-client-chat}"
-            complaints_table="${COMPLAINTS_TABLE_PROD:-client-chat-complaints}"
-            audit_table="${AUDIT_TABLE_PROD:-client-chat-audit}"
-            manager_password="${MANAGER_PASSWORD_PROD:-}"
-            manager_auth_secret="${MANAGER_AUTH_SECRET_PROD:-}"
-            slack_webhook="${SLACK_WEBHOOK_PROD:-}"
-            alarm_email="${ALARM_EMAIL_PROD:-}"
+            role_arn="${ROLE_ARN_ENV:-}"
+            project_name="${PROJECT_NAME_ENV:-client-chat}"
+            complaints_table="${COMPLAINTS_TABLE_ENV:-client-chat-complaints}"
+            audit_table="${AUDIT_TABLE_ENV:-client-chat-audit}"
+            manager_password="${MANAGER_PASSWORD_ENV:-}"
+            manager_auth_secret="${MANAGER_AUTH_SECRET_ENV:-}"
+            slack_webhook="${SLACK_WEBHOOK_ENV:-}"
+            alarm_email="${ALARM_EMAIL_ENV:-}"
             session_name="client-chat-prod-github-actions"
             missing_secret_hint="production environment"
           fi
 
           if [[ -z "$role_arn" ]]; then
-            echo "::error::Missing AWS role ARN for ${TARGET_ENVIRONMENT}. Set AWS_ROLE_ARN_DEV or AWS_ROLE_ARN as appropriate."
+            echo "::error::Missing AWS role ARN for ${TARGET_ENVIRONMENT}. Set AWS_ROLE_ARN on that GitHub environment."
             exit 1
           fi
 

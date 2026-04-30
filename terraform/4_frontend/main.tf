@@ -14,7 +14,10 @@ provider "aws" {
 }
 
 locals {
-  frontend_bucket_name = coalesce(var.frontend_bucket_name, "${var.project_name}-frontend-${data.aws_caller_identity.current.account_id}")
+  frontend_bucket_name     = coalesce(var.frontend_bucket_name, "${var.project_name}-frontend-${data.aws_caller_identity.current.account_id}")
+  slack_webhook_enabled    = trimspace(var.slack_webhook_url) != ""
+  slack_webhook_param_arn  = local.slack_webhook_enabled ? aws_ssm_parameter.slack_webhook_url[0].arn : null
+  slack_webhook_param_name = local.slack_webhook_enabled ? aws_ssm_parameter.slack_webhook_url[0].name : ""
 }
 
 data "aws_caller_identity" "current" {}
@@ -32,6 +35,7 @@ resource "aws_ssm_parameter" "manager_auth_secret" {
 }
 
 resource "aws_ssm_parameter" "slack_webhook_url" {
+  count = local.slack_webhook_enabled ? 1 : 0
   name  = "/${var.project_name}/slack_webhook_url"
   type  = "SecureString"
   value = var.slack_webhook_url
@@ -86,11 +90,13 @@ resource "aws_iam_role_policy" "api_lambda_runtime" {
         Action = [
           "ssm:GetParameter"
         ]
-        Resource = [
-          aws_ssm_parameter.manager_password.arn,
-          aws_ssm_parameter.manager_auth_secret.arn,
-          aws_ssm_parameter.slack_webhook_url.arn
-        ]
+        Resource = concat(
+          [
+            aws_ssm_parameter.manager_password.arn,
+            aws_ssm_parameter.manager_auth_secret.arn
+          ],
+          local.slack_webhook_enabled ? [local.slack_webhook_param_arn] : []
+        )
       }
     ]
   })
@@ -114,7 +120,7 @@ resource "aws_lambda_function" "api" {
       DYNAMODB_AUDIT_TABLE      = var.audit_table_name
       MANAGER_PASSWORD_PARAM    = aws_ssm_parameter.manager_password.name
       MANAGER_AUTH_SECRET_PARAM = aws_ssm_parameter.manager_auth_secret.name
-      SLACK_WEBHOOK_URL_PARAM   = aws_ssm_parameter.slack_webhook_url.name
+      SLACK_WEBHOOK_URL_PARAM   = local.slack_webhook_param_name
       CORS_ORIGINS              = "http://localhost:3000,http://127.0.0.1:3000,https://${aws_cloudfront_distribution.frontend.domain_name}"
     }
   }

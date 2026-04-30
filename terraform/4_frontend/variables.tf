@@ -8,11 +8,23 @@ variable "project_name" {
   default = "customer-report-agent"
 }
 
-variable "frontend_bucket_name" {
+variable "lambda_zip_path" {
   type = string
 }
 
-variable "lambda_zip_path" {
+variable "complaints_table_name" {
+  type = string
+}
+
+variable "audit_table_name" {
+  type = string
+}
+
+variable "complaints_table_arn" {
+  type = string
+}
+
+variable "audit_table_arn" {
   type = string
 }
 
@@ -30,4 +42,9 @@ variable "slack_webhook_url" {
   type      = string
   default   = ""
   sensitive = true
+}
+
+variable "frontend_bucket_name" {
+  type    = string
+  default = null
 }

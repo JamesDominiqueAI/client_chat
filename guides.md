@@ -16,7 +16,7 @@ The MCP layer is intentionally broad for the assessment: the project now registe
 
 The current implementation also includes manager login, SQLite complaint persistence, CSV upload/import, persistent audit events, an admin/integration settings panel, and a real Slack webhook path for `external-slack-mcp` when `SLACK_WEBHOOK_URL` is configured.
 
-The repo now also supports the AWS-native backend path: Lambda through Mangum, DynamoDB store support, and Terraform for CloudFront, S3, API Gateway, Lambda, DynamoDB, and secrets configuration.
+The repo now also supports the AWS-native backend path: Lambda through Mangum, DynamoDB store support, and phased Terraform for CloudFront, S3, API Gateway, Lambda, DynamoDB, secrets configuration, and monitoring.
 
 ## Assessment Pitch
 
@@ -108,6 +108,7 @@ For assessment demos, emphasize that the current project already has 5 external 
 - DynamoDB store implementation in `backend/store_dynamodb.py`.
 - Terraform stack for CloudFront, S3, API Gateway, Lambda, DynamoDB, and IAM.
 - Runtime config loader in `backend/runtime_config.py` for env-or-SSM secret resolution.
+- One-command AWS deployment script in `scripts/deploy_aws.sh`, modeled after `supplychain-ai`.
 
 ## Admin And Data Flow
 

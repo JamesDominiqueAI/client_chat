@@ -1,0 +1,4 @@
+aws_region           = "us-east-1"
+project_name         = "customer-report-agent"
+lambda_function_name = "customer-report-agent-api"
+alarm_email          = ""

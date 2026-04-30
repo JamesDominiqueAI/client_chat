@@ -40,6 +40,7 @@ User text/voice
 - [Architecture](guides/architecture.md)
 - [Deployment](guides/deployment.md)
 - [AWS App Runner Deployment](guides/aws_apprunner_deployment.md)
+  Legacy container path kept for reference. The preferred AWS deployment is the phased Terraform flow below.
 - [Terraform AWS Deployment](terraform/README.md)
 
 ## MCP Servers And Tools
@@ -139,42 +140,22 @@ Then open `http://localhost:3000`. The backend is exposed at `http://localhost:8
 
 ## AWS Lambda And Terraform
 
-The repo now supports the AWS-native path:
+The preferred AWS path now mirrors the `supplychain-ai` deployment model:
 
-- CloudFront
-- S3 static frontend
-- API Gateway HTTP API
-- Lambda FastAPI app using Mangum
+- phased Terraform in `terraform/1_foundation` through `terraform/5_enterprise`
+- one-command deploy through `scripts/deploy_aws.sh`
+- CloudFront + private S3 frontend
+- API Gateway HTTP API + Lambda FastAPI app using Mangum
 - DynamoDB complaints and audit tables
-- Terraform provisioning
 - SSM-backed runtime secrets
 
-Package Lambda:
+Normal deploy:
 
 ```bash
-./scripts/aws/package_lambda.sh
+bash scripts/deploy_aws.sh
 ```
 
-Build static frontend:
-
-```bash
-cd frontend
-STATIC_EXPORT=1 NEXT_PUBLIC_API_URL="https://your-api-id.execute-api.us-east-1.amazonaws.com" npm run build
-```
-
-Provision AWS resources:
-
-```bash
-cd terraform
-terraform init
-terraform apply
-```
-
-Publish the frontend to S3 and invalidate CloudFront:
-
-```bash
-./scripts/aws/publish_frontend.sh
-```
+That script packages the Lambda, applies the Terraform phases, builds the static frontend with the deployed API URL, uploads it to S3, invalidates CloudFront, and applies monitoring.
 
 ## Demo Prompts
 

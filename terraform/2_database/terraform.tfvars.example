@@ -1,0 +1,4 @@
+aws_region            = "us-east-1"
+project_name          = "customer-report-agent"
+complaints_table_name = "customer-report-agent-complaints"
+audit_table_name      = "customer-report-agent-audit"

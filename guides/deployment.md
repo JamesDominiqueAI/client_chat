@@ -1,11 +1,12 @@
 # Deployment
 
-The intended deployment shape is:
+The preferred AWS deployment shape is:
 
-- Frontend: Vercel Next.js app
-- Backend: Vercel Python/FastAPI service, AWS Lambda, or container service
-- Dataset: bundled JSON for the capstone demo
-- Future data layer: database or support-system API
+- Frontend: private S3 static export behind CloudFront
+- Backend: AWS Lambda FastAPI app using Mangum behind API Gateway HTTP API
+- Data: DynamoDB complaints and audit tables
+- Secrets: SSM Parameter Store or Secrets Manager
+- Monitoring: CloudWatch dashboard and SNS alarms through phased Terraform
 
 ## Environment Variables
 
@@ -43,8 +44,9 @@ For the AWS-native deployment path:
 
 - set `STORE_BACKEND=dynamodb`
 - deploy the backend as Lambda through `backend/api/lambda_handler.py`
-- provision the data layer with Terraform in [terraform/README.md](/home/ragive/projects/client_chat/terraform/README.md)
+- use phased Terraform documented in [terraform/README.md](/home/ragive/projects/client_chat/terraform/README.md)
 - prefer `*_PARAM` env vars so Lambda reads secrets from SSM parameter names at runtime
+- use `bash scripts/deploy_aws.sh` as the normal deployment entrypoint
 
 ## Container Deployment
 

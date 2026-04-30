@@ -1,5 +1,0 @@
-frontend_bucket_name = "customer-report-agent-frontend-example"
-lambda_zip_path      = "../dist/customer-report-agent-lambda.zip"
-manager_password     = "replace-me"
-manager_auth_secret  = "replace-with-a-long-random-secret"
-slack_webhook_url    = ""

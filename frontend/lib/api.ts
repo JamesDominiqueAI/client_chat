@@ -22,6 +22,7 @@ export type ChatResponse = {
   traceId: string;
   latencyMs: number;
   sessionId: string;
+  tokenCount: number;
   discoveredTools: Array<{
     tool: string;
     name: string;
@@ -29,6 +30,20 @@ export type ChatResponse = {
     description: string;
     score: number;
   }>;
+};
+
+export type StreamChunk = {
+  chunk?: string;
+  type: "content" | "done";
+  tool?: string;
+  mcpServer?: string;
+  connection?: string;
+  source?: string;
+  traceId?: string;
+  latencyMs?: number;
+  sessionId?: string;
+  tokenCount?: number;
+  discoveredTools?: ChatResponse["discoveredTools"];
 };
 
 export type ObservabilityMetrics = {
@@ -127,4 +142,53 @@ export function reportUrl(token: string) {
 
 export function createSessionId() {
   return `session-${Math.random().toString(36).slice(2)}-${Date.now()}`;
+}
+
+export async function* streamChat(
+  message: string,
+  sessionId: string,
+  authToken: string
+): AsyncGenerator<StreamChunk> {
+  const response = await fetch(`${API_BASE}/api/chat/stream`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...authHeaders(authToken),
+    },
+    body: JSON.stringify({ message, sessionId }),
+  });
+
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(detail || `Request failed with status ${response.status}`);
+  }
+
+  const reader = response.body?.getReader();
+  if (!reader) {
+    throw new Error("Response body is not readable");
+  }
+
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n\n");
+    buffer = lines.pop() || "";
+
+    for (const line of lines) {
+      if (line.startsWith("data: ")) {
+        const data = line.slice(6);
+        try {
+          const chunk: StreamChunk = JSON.parse(data);
+          yield chunk;
+        } catch {
+          // Skip invalid JSON
+        }
+      }
+    }
+  }
 }

@@ -1,6 +1,6 @@
 import React, { FormEvent, useMemo, useState } from "react";
 
-import { authHeaders, ChatResponse, createSessionId, fetchJson } from "../lib/api";
+import { authHeaders, ChatResponse, createSessionId, fetchJson, streamChat, StreamChunk } from "../lib/api";
 
 const demoPrompts = [
   "Summarize today's customer complaints.",
@@ -50,7 +50,10 @@ export function ChatBox({ authToken }: { authToken: string }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [response, setResponse] = useState<ChatResponse | null>(null);
+  const [streamingText, setStreamingText] = useState("");
+  const [isStreaming, setIsStreaming] = useState(false);
   const [listening, setListening] = useState(false);
+  const [sessionHistory, setSessionHistory] = useState<Array<{role: "user" | "assistant", content: string}>>([]);
   const [sessionId] = useState(() => {
     if (typeof window === "undefined") {
       return "session-server-render";
@@ -65,43 +68,76 @@ export function ChatBox({ authToken }: { authToken: string }) {
   });
 
   const activity = useMemo(() => {
-    if (!response) {
+    if (!response && !streamingText) {
       return [
         ["Tool", "waiting"],
         ["Source", "waiting"],
         ["Trace", "waiting"],
         ["Latency", "waiting"],
+        ["Tokens", "waiting"],
       ];
     }
     return [
-      ["MCP Server", response.mcpServer],
-      ["Connection", response.connection],
-      ["Tool", response.tool],
-      ["Source", response.source],
-      ["Trace", response.traceId.slice(0, 8)],
-      ["Session", response.sessionId.slice(-8)],
-      ["Latency", `${response.latencyMs} ms`],
+      ["MCP Server", response?.mcpServer || "streaming"],
+      ["Connection", response?.connection || "streaming"],
+      ["Tool", response?.tool || "streaming"],
+      ["Source", response?.source || "streaming"],
+      ["Trace", (response?.traceId || "...").slice(0, 8)],
+      ["Session", (response?.sessionId || sessionId).slice(-8)],
+      ["Latency", response ? `${response.latencyMs} ms` : "..."],
+      ["Tokens", response?.tokenCount ? `${response.tokenCount}` : "..."],
     ];
-  }, [response]);
+  }, [response, streamingText, sessionId]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setLoading(true);
     setError(null);
+    setStreamingText("");
+    setIsStreaming(true);
+    
+    // Add to session history
+    setSessionHistory(prev => [...prev, { role: "user", content: message }]);
+    
     try {
       if (!authToken) {
         throw new Error("Manager login is required for the workspace.");
       }
-      const result = await fetchJson<ChatResponse>("/api/chat", {
-        method: "POST",
-        headers: authHeaders(authToken),
-        body: JSON.stringify({ message, sessionId }),
-      });
-      setResponse(result);
+      
+      // Use streaming endpoint
+      let finalResponse: ChatResponse | null = null;
+      let streamingContent = "";
+      
+      for await (const chunk of streamChat(message, sessionId, authToken)) {
+        if (chunk.type === "content" && chunk.chunk) {
+          streamingContent += chunk.chunk;
+          setStreamingText(streamingContent);
+        } else if (chunk.type === "done") {
+          // Build response from done chunk
+          finalResponse = {
+            response: streamingContent,
+            tool: chunk.tool || "",
+            mcpServer: chunk.mcpServer || "",
+            connection: chunk.connection as "internal" | "external" || "internal",
+            source: chunk.source || "",
+            traceId: chunk.traceId || "",
+            latencyMs: chunk.latencyMs || 0,
+            sessionId: chunk.sessionId || sessionId,
+            tokenCount: chunk.tokenCount || 0,
+            discoveredTools: chunk.discoveredTools || [],
+          };
+        }
+      }
+      
+      if (finalResponse) {
+        setResponse(finalResponse);
+        setSessionHistory(prev => [...prev, { role: "assistant", content: finalResponse!.response }]);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "The chat request failed.");
     } finally {
       setLoading(false);
+      setIsStreaming(false);
     }
   }
 
@@ -134,7 +170,7 @@ export function ChatBox({ authToken }: { authToken: string }) {
           <h2>Ask for complaint summaries, urgent cases, sentiment, and action plans.</h2>
         </div>
 
-        <form onSubmit={submit} className="chat-form">
+<form onSubmit={submit} className="chat-form">
           <textarea value={message} onChange={(event) => setMessage(event.target.value)} rows={4} />
           <div className="chat-actions">
             <button className="button primary" disabled={loading} type="submit">
@@ -155,7 +191,27 @@ export function ChatBox({ authToken }: { authToken: string }) {
         </div>
 
         {error ? <p className="error">{error}</p> : null}
-        {response ? <div className="answer">{formatAnswer(response.response)}</div> : null}
+        
+        {/* Session History */}
+        {sessionHistory.length > 0 && (
+          <div className="session-history">
+            <h3>Conversation</h3>
+            {sessionHistory.map((entry, idx) => (
+              <div key={idx} className={`history-entry ${entry.role}`}>
+                <span className="history-role">{entry.role === "user" ? "You" : "Assistant"}</span>
+                <div className="history-content">{formatAnswer(entry.content)}</div>
+              </div>
+            ))}
+          </div>
+        )}
+        
+        {/* Streaming or Response */}
+        {(streamingText || response) && (
+          <div className="answer">
+            {isStreaming && <span className="typing-indicator"> typing...</span>}
+            {formatAnswer(streamingText || response!.response)}
+          </div>
+        )}
         {response?.discoveredTools?.length ? (
           <div className="answer">
             <h3>Discovered MCP tools</h3>

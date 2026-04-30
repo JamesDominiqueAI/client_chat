@@ -120,28 +120,82 @@ jobs:
         with:
           terraform_wrapper: false
 
+      - name: Resolve development deployment configuration
+        id: dev_config
+        env:
+          ROLE_ARN_PRIMARY: ${{ secrets.AWS_ROLE_ARN_DEV }}
+          ROLE_ARN_FALLBACK: ${{ secrets.AWS_ROLE_ARN }}
+          AWS_REGION_PRIMARY: ${{ secrets.DEFAULT_AWS_REGION }}
+          PROJECT_NAME_PRIMARY: ${{ secrets.PROJECT_NAME_DEV }}
+          COMPLAINTS_TABLE_PRIMARY: ${{ secrets.COMPLAINTS_TABLE_NAME_DEV }}
+          AUDIT_TABLE_PRIMARY: ${{ secrets.AUDIT_TABLE_NAME_DEV }}
+          MANAGER_PASSWORD_VALUE: ${{ secrets.MANAGER_PASSWORD_DEV }}
+          MANAGER_AUTH_SECRET_VALUE: ${{ secrets.MANAGER_AUTH_SECRET_DEV }}
+          SLACK_WEBHOOK_VALUE: ${{ secrets.SLACK_WEBHOOK_URL_DEV }}
+          ALARM_EMAIL_VALUE: ${{ secrets.ALARM_EMAIL_DEV }}
+          API_BASE_URL_VALUE: ${{ secrets.DEV_API_BASE_URL }}
+        run: |
+          role_arn="${ROLE_ARN_PRIMARY:-${ROLE_ARN_FALLBACK:-}}"
+          aws_region="${AWS_REGION_PRIMARY:-us-east-1}"
+          project_name="${PROJECT_NAME_PRIMARY:-client-chat-dev}"
+          complaints_table="${COMPLAINTS_TABLE_PRIMARY:-client-chat-dev-complaints}"
+          audit_table="${AUDIT_TABLE_PRIMARY:-client-chat-dev-audit}"
+
+          if [[ -z "$role_arn" ]]; then
+            echo "::error::Missing AWS role ARN. Set AWS_ROLE_ARN_DEV on the development environment or AWS_ROLE_ARN at the repository level."
+            exit 1
+          fi
+
+          if [[ -z "${MANAGER_PASSWORD_VALUE:-}" ]]; then
+            echo "::error::Missing MANAGER_PASSWORD_DEV secret in the development environment."
+            exit 1
+          fi
+
+          if [[ -z "${MANAGER_AUTH_SECRET_VALUE:-}" ]]; then
+            echo "::error::Missing MANAGER_AUTH_SECRET_DEV secret in the development environment."
+            exit 1
+          fi
+
+          if [[ -z "${API_BASE_URL_VALUE:-}" ]]; then
+            echo "::error::Missing DEV_API_BASE_URL secret in the development environment."
+            exit 1
+          fi
+
+          {
+            echo "role_arn=$role_arn"
+            echo "aws_region=$aws_region"
+            echo "project_name=$project_name"
+            echo "complaints_table=$complaints_table"
+            echo "audit_table=$audit_table"
+            echo "manager_password=${MANAGER_PASSWORD_VALUE}"
+            echo "manager_auth_secret=${MANAGER_AUTH_SECRET_VALUE}"
+            echo "slack_webhook=${SLACK_WEBHOOK_VALUE}"
+            echo "alarm_email=${ALARM_EMAIL_VALUE}"
+            echo "api_base_url=${API_BASE_URL_VALUE}"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN_DEV }}
+          role-to-assume: ${{ steps.dev_config.outputs.role_arn }}
           role-session-name: client-chat-dev-github-actions
-          aws-region: ${{ secrets.DEFAULT_AWS_REGION || 'us-east-1' }}
+          aws-region: ${{ steps.dev_config.outputs.aws_region }}
 
       - name: Deploy development
         env:
-          DEFAULT_AWS_REGION: ${{ secrets.DEFAULT_AWS_REGION || 'us-east-1' }}
-          PROJECT_NAME: ${{ secrets.PROJECT_NAME_DEV || 'client-chat-dev' }}
-          COMPLAINTS_TABLE_NAME: ${{ secrets.COMPLAINTS_TABLE_NAME_DEV || 'client-chat-dev-complaints' }}
-          AUDIT_TABLE_NAME: ${{ secrets.AUDIT_TABLE_NAME_DEV || 'client-chat-dev-audit' }}
-          MANAGER_PASSWORD: ${{ secrets.MANAGER_PASSWORD_DEV }}
-          MANAGER_AUTH_SECRET: ${{ secrets.MANAGER_AUTH_SECRET_DEV }}
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL_DEV }}
-          ALARM_EMAIL: ${{ secrets.ALARM_EMAIL_DEV }}
+          DEFAULT_AWS_REGION: ${{ steps.dev_config.outputs.aws_region }}
+          PROJECT_NAME: ${{ steps.dev_config.outputs.project_name }}
+          COMPLAINTS_TABLE_NAME: ${{ steps.dev_config.outputs.complaints_table }}
+          AUDIT_TABLE_NAME: ${{ steps.dev_config.outputs.audit_table }}
+          MANAGER_PASSWORD: ${{ steps.dev_config.outputs.manager_password }}
+          MANAGER_AUTH_SECRET: ${{ steps.dev_config.outputs.manager_auth_secret }}
+          SLACK_WEBHOOK_URL: ${{ steps.dev_config.outputs.slack_webhook }}
+          ALARM_EMAIL: ${{ steps.dev_config.outputs.alarm_email }}
         run: bash scripts/deploy_aws.sh
 
       - name: Smoke test API
         env:
-          API_BASE_URL: ${{ secrets.DEV_API_BASE_URL }}
+          API_BASE_URL: ${{ steps.dev_config.outputs.api_base_url }}
         run: curl --fail --silent --show-error "${API_BASE_URL}/health"
 
   deploy_manual:
@@ -180,26 +234,112 @@ jobs:
         with:
           terraform_wrapper: false
 
+      - name: Resolve selected deployment configuration
+        id: deploy_config
+        env:
+          TARGET_ENVIRONMENT: ${{ github.event.inputs.environment }}
+          ROLE_ARN_DEV: ${{ secrets.AWS_ROLE_ARN_DEV }}
+          ROLE_ARN_PROD: ${{ secrets.AWS_ROLE_ARN }}
+          AWS_REGION_PRIMARY: ${{ secrets.DEFAULT_AWS_REGION }}
+          PROJECT_NAME_DEV: ${{ secrets.PROJECT_NAME_DEV }}
+          PROJECT_NAME_PROD: ${{ secrets.PROJECT_NAME }}
+          COMPLAINTS_TABLE_DEV: ${{ secrets.COMPLAINTS_TABLE_NAME_DEV }}
+          COMPLAINTS_TABLE_PROD: ${{ secrets.COMPLAINTS_TABLE_NAME }}
+          AUDIT_TABLE_DEV: ${{ secrets.AUDIT_TABLE_NAME_DEV }}
+          AUDIT_TABLE_PROD: ${{ secrets.AUDIT_TABLE_NAME }}
+          MANAGER_PASSWORD_DEV: ${{ secrets.MANAGER_PASSWORD_DEV }}
+          MANAGER_PASSWORD_PROD: ${{ secrets.MANAGER_PASSWORD }}
+          MANAGER_AUTH_SECRET_DEV: ${{ secrets.MANAGER_AUTH_SECRET_DEV }}
+          MANAGER_AUTH_SECRET_PROD: ${{ secrets.MANAGER_AUTH_SECRET }}
+          SLACK_WEBHOOK_DEV: ${{ secrets.SLACK_WEBHOOK_URL_DEV }}
+          SLACK_WEBHOOK_PROD: ${{ secrets.SLACK_WEBHOOK_URL }}
+          ALARM_EMAIL_DEV: ${{ secrets.ALARM_EMAIL_DEV }}
+          ALARM_EMAIL_PROD: ${{ secrets.ALARM_EMAIL }}
+          API_BASE_URL_DEV: ${{ secrets.DEV_API_BASE_URL }}
+          API_BASE_URL_PROD: ${{ secrets.PROD_API_BASE_URL }}
+        run: |
+          aws_region="${AWS_REGION_PRIMARY:-us-east-1}"
+
+          if [[ "${TARGET_ENVIRONMENT}" == "development" ]]; then
+            role_arn="${ROLE_ARN_DEV:-${ROLE_ARN_PROD:-}}"
+            project_name="${PROJECT_NAME_DEV:-client-chat-dev}"
+            complaints_table="${COMPLAINTS_TABLE_DEV:-client-chat-dev-complaints}"
+            audit_table="${AUDIT_TABLE_DEV:-client-chat-dev-audit}"
+            manager_password="${MANAGER_PASSWORD_DEV:-}"
+            manager_auth_secret="${MANAGER_AUTH_SECRET_DEV:-}"
+            slack_webhook="${SLACK_WEBHOOK_DEV:-}"
+            alarm_email="${ALARM_EMAIL_DEV:-}"
+            api_base_url="${API_BASE_URL_DEV:-}"
+            session_name="client-chat-dev-github-actions"
+            missing_secret_hint="development environment"
+          else
+            role_arn="${ROLE_ARN_PROD:-}"
+            project_name="${PROJECT_NAME_PROD:-client-chat}"
+            complaints_table="${COMPLAINTS_TABLE_PROD:-client-chat-complaints}"
+            audit_table="${AUDIT_TABLE_PROD:-client-chat-audit}"
+            manager_password="${MANAGER_PASSWORD_PROD:-}"
+            manager_auth_secret="${MANAGER_AUTH_SECRET_PROD:-}"
+            slack_webhook="${SLACK_WEBHOOK_PROD:-}"
+            alarm_email="${ALARM_EMAIL_PROD:-}"
+            api_base_url="${API_BASE_URL_PROD:-}"
+            session_name="client-chat-prod-github-actions"
+            missing_secret_hint="production environment"
+          fi
+
+          if [[ -z "$role_arn" ]]; then
+            echo "::error::Missing AWS role ARN for ${TARGET_ENVIRONMENT}. Set AWS_ROLE_ARN_DEV or AWS_ROLE_ARN as appropriate."
+            exit 1
+          fi
+
+          if [[ -z "$manager_password" ]]; then
+            echo "::error::Missing manager password secret for ${missing_secret_hint}."
+            exit 1
+          fi
+
+          if [[ -z "$manager_auth_secret" ]]; then
+            echo "::error::Missing manager auth secret for ${missing_secret_hint}."
+            exit 1
+          fi
+
+          if [[ -z "$api_base_url" ]]; then
+            echo "::error::Missing API base URL smoke-test secret for ${missing_secret_hint}."
+            exit 1
+          fi
+
+          {
+            echo "role_arn=$role_arn"
+            echo "aws_region=$aws_region"
+            echo "project_name=$project_name"
+            echo "complaints_table=$complaints_table"
+            echo "audit_table=$audit_table"
+            echo "manager_password=$manager_password"
+            echo "manager_auth_secret=$manager_auth_secret"
+            echo "slack_webhook=$slack_webhook"
+            echo "alarm_email=$alarm_email"
+            echo "api_base_url=$api_base_url"
+            echo "session_name=$session_name"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ github.event.inputs.environment == 'development' && secrets.AWS_ROLE_ARN_DEV || secrets.AWS_ROLE_ARN }}
-          role-session-name: ${{ github.event.inputs.environment == 'development' && 'client-chat-dev-github-actions' || 'client-chat-prod-github-actions' }}
-          aws-region: ${{ secrets.DEFAULT_AWS_REGION || 'us-east-1' }}
+          role-to-assume: ${{ steps.deploy_config.outputs.role_arn }}
+          role-session-name: ${{ steps.deploy_config.outputs.session_name }}
+          aws-region: ${{ steps.deploy_config.outputs.aws_region }}
 
       - name: Deploy selected environment
         env:
-          DEFAULT_AWS_REGION: ${{ secrets.DEFAULT_AWS_REGION || 'us-east-1' }}
-          PROJECT_NAME: ${{ github.event.inputs.environment == 'development' && (secrets.PROJECT_NAME_DEV || 'client-chat-dev') || (secrets.PROJECT_NAME || 'client-chat') }}
-          COMPLAINTS_TABLE_NAME: ${{ github.event.inputs.environment == 'development' && (secrets.COMPLAINTS_TABLE_NAME_DEV || 'client-chat-dev-complaints') || (secrets.COMPLAINTS_TABLE_NAME || 'client-chat-complaints') }}
-          AUDIT_TABLE_NAME: ${{ github.event.inputs.environment == 'development' && (secrets.AUDIT_TABLE_NAME_DEV || 'client-chat-dev-audit') || (secrets.AUDIT_TABLE_NAME || 'client-chat-audit') }}
-          MANAGER_PASSWORD: ${{ github.event.inputs.environment == 'development' && secrets.MANAGER_PASSWORD_DEV || secrets.MANAGER_PASSWORD }}
-          MANAGER_AUTH_SECRET: ${{ github.event.inputs.environment == 'development' && secrets.MANAGER_AUTH_SECRET_DEV || secrets.MANAGER_AUTH_SECRET }}
-          SLACK_WEBHOOK_URL: ${{ github.event.inputs.environment == 'development' && secrets.SLACK_WEBHOOK_URL_DEV || secrets.SLACK_WEBHOOK_URL }}
-          ALARM_EMAIL: ${{ github.event.inputs.environment == 'development' && secrets.ALARM_EMAIL_DEV || secrets.ALARM_EMAIL }}
+          DEFAULT_AWS_REGION: ${{ steps.deploy_config.outputs.aws_region }}
+          PROJECT_NAME: ${{ steps.deploy_config.outputs.project_name }}
+          COMPLAINTS_TABLE_NAME: ${{ steps.deploy_config.outputs.complaints_table }}
+          AUDIT_TABLE_NAME: ${{ steps.deploy_config.outputs.audit_table }}
+          MANAGER_PASSWORD: ${{ steps.deploy_config.outputs.manager_password }}
+          MANAGER_AUTH_SECRET: ${{ steps.deploy_config.outputs.manager_auth_secret }}
+          SLACK_WEBHOOK_URL: ${{ steps.deploy_config.outputs.slack_webhook }}
+          ALARM_EMAIL: ${{ steps.deploy_config.outputs.alarm_email }}
         run: bash scripts/deploy_aws.sh
 
       - name: Smoke test API
         env:
-          API_BASE_URL: ${{ github.event.inputs.environment == 'development' && secrets.DEV_API_BASE_URL || secrets.PROD_API_BASE_URL }}
+          API_BASE_URL: ${{ steps.deploy_config.outputs.api_base_url }}
         run: curl --fail --silent --show-error "${API_BASE_URL}/health"

@@ -1,0 +1,7 @@
+aws_region                = "us-east-1"
+project_slug              = "client-chat"
+github_repository         = "JamesDominiqueAI/client_chat"
+github_actions_role_name  = "client-chat-github-actions"
+# terraform_state_bucket_name = "client-chat-terraform-state-123456789012"
+# terraform_lock_table_name   = "client-chat-terraform-locks"
+# existing_github_oidc_provider_arn = "arn:aws:iam::123456789012:oidc-provider/token.actions.githubusercontent.com"

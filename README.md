@@ -202,6 +202,27 @@ Deployment names are convention-based:
 
 Table names are derived automatically from the project name.
 
+## AWS Bootstrap
+
+Before GitHub Actions can deploy to AWS, bootstrap the AWS-side identity and remote-state resources once with your existing AWS credentials:
+
+```bash
+bash scripts/bootstrap_github_actions.sh
+```
+
+That script creates:
+
+- GitHub Actions IAM role
+- Terraform S3 state bucket
+- Terraform DynamoDB lock table
+
+Then copy the printed values into GitHub:
+
+- `AWS_ROLE_ARN`
+- `DEFAULT_AWS_REGION`
+- `TERRAFORM_STATE_BUCKET`
+- `TERRAFORM_LOCK_TABLE`
+
 ## Demo Prompts
 
 - `Summarize today's customer complaints.`

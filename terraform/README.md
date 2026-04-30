@@ -4,6 +4,7 @@ The repository uses phased Terraform so each deployment concern can be applied a
 
 Current phases:
 
+- `bootstrap/`: one-time GitHub Actions IAM role plus Terraform remote-state resources.
 - `1_foundation/`: shared provider/project foundation.
 - `2_database/`: DynamoDB complaints and audit tables.
 - `3_agents/`: reserved async-agent phase for future queue and worker expansion.
@@ -11,6 +12,12 @@ Current phases:
 - `5_enterprise/`: SNS alerts, CloudWatch dashboard, and operational monitoring.
 
 The normal deployment path is:
+
+```bash
+bash scripts/bootstrap_github_actions.sh
+```
+
+Then:
 
 ```bash
 bash scripts/deploy_aws.sh

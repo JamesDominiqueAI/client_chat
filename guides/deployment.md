@@ -73,6 +73,22 @@ Required GitHub secret or variable values:
 - `TERRAFORM_STATE_BUCKET`
 - `TERRAFORM_LOCK_TABLE`
 
+## Bootstrap First
+
+GitHub cannot create `AWS_ROLE_ARN` before it can already authenticate to AWS. Bootstrap those resources once locally with your existing AWS credentials:
+
+```bash
+bash scripts/bootstrap_github_actions.sh
+```
+
+That uses [terraform/bootstrap](/home/ragive/projects/client_chat/terraform/bootstrap) to create:
+
+- the GitHub Actions IAM role
+- the Terraform S3 state bucket
+- the Terraform DynamoDB lock table
+
+Copy the resulting outputs into GitHub environments or repository variables after the bootstrap run finishes.
+
 Remote state matters here. The deploy and destroy workflows run on fresh GitHub-hosted runners, so Terraform state must live in S3 with DynamoDB locking instead of staying local to the runner.
 
 Optional environment secrets:

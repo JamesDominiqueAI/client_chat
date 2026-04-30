@@ -14,9 +14,13 @@ provider "aws" {
 }
 
 locals {
-  frontend_bucket_name     = coalesce(var.frontend_bucket_name, "${var.project_name}-frontend-${data.aws_caller_identity.current.account_id}")
-  slack_webhook_enabled    = trimspace(var.slack_webhook_url) != ""
-  slack_webhook_param_arn  = local.slack_webhook_enabled ? aws_ssm_parameter.slack_webhook_url[0].arn : null
+  frontend_bucket_name  = coalesce(var.frontend_bucket_name, "${var.project_name}-frontend-${data.aws_caller_identity.current.account_id}")
+  slack_webhook_enabled = trimspace(var.slack_webhook_url) != ""
+  ssm_parameter_arns = compact([
+    aws_ssm_parameter.manager_password.arn,
+    aws_ssm_parameter.manager_auth_secret.arn,
+    local.slack_webhook_enabled ? aws_ssm_parameter.slack_webhook_url[0].arn : ""
+  ])
   slack_webhook_param_name = local.slack_webhook_enabled ? aws_ssm_parameter.slack_webhook_url[0].name : ""
 }
 
@@ -63,43 +67,36 @@ resource "aws_iam_role_policy_attachment" "api_lambda_basic" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
-resource "aws_iam_role_policy" "api_lambda_runtime" {
-  name = "${var.project_name}-api-lambda-runtime"
-  role = aws_iam_role.api_lambda.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "dynamodb:BatchWriteItem",
-          "dynamodb:DeleteItem",
-          "dynamodb:GetItem",
-          "dynamodb:PutItem",
-          "dynamodb:Scan",
-          "dynamodb:UpdateItem"
-        ]
-        Resource = [
-          var.complaints_table_arn,
-          var.audit_table_arn
-        ]
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "ssm:GetParameter"
-        ]
-        Resource = concat(
-          [
-            aws_ssm_parameter.manager_password.arn,
-            aws_ssm_parameter.manager_auth_secret.arn
-          ],
-          local.slack_webhook_enabled ? [local.slack_webhook_param_arn] : []
-        )
-      }
+data "aws_iam_policy_document" "api_lambda_runtime" {
+  statement {
+    effect = "Allow"
+    actions = [
+      "dynamodb:BatchWriteItem",
+      "dynamodb:DeleteItem",
+      "dynamodb:GetItem",
+      "dynamodb:PutItem",
+      "dynamodb:Scan",
+      "dynamodb:UpdateItem"
     ]
-  })
+    resources = [
+      var.complaints_table_arn,
+      var.audit_table_arn
+    ]
+  }
+
+  statement {
+    effect = "Allow"
+    actions = [
+      "ssm:GetParameter"
+    ]
+    resources = local.ssm_parameter_arns
+  }
+}
+
+resource "aws_iam_role_policy" "api_lambda_runtime" {
+  name   = "${var.project_name}-api-lambda-runtime"
+  role   = aws_iam_role.api_lambda.id
+  policy = data.aws_iam_policy_document.api_lambda_runtime.json
 }
 
 resource "aws_lambda_function" "api" {
@@ -115,7 +112,6 @@ resource "aws_lambda_function" "api" {
   environment {
     variables = {
       STORE_BACKEND             = "dynamodb"
-      AWS_REGION                = var.aws_region
       DYNAMODB_COMPLAINTS_TABLE = var.complaints_table_name
       DYNAMODB_AUDIT_TABLE      = var.audit_table_name
       MANAGER_PASSWORD_PARAM    = aws_ssm_parameter.manager_password.name

@@ -41,42 +41,31 @@ jobs:
         env:
           TARGET_ENVIRONMENT: ${{ github.event.inputs.environment }}
           ROLE_ARN_ENV: ${{ secrets.AWS_ROLE_ARN }}
-          ROLE_ARN_DEV_LEGACY: ${{ secrets.AWS_ROLE_ARN_DEV }}
           AWS_REGION_PRIMARY: ${{ secrets.DEFAULT_AWS_REGION }}
-          PROJECT_NAME_ENV: ${{ secrets.PROJECT_NAME }}
-          PROJECT_NAME_DEV_LEGACY: ${{ secrets.PROJECT_NAME_DEV }}
-          COMPLAINTS_TABLE_ENV: ${{ secrets.COMPLAINTS_TABLE_NAME }}
-          COMPLAINTS_TABLE_DEV_LEGACY: ${{ secrets.COMPLAINTS_TABLE_NAME_DEV }}
-          AUDIT_TABLE_ENV: ${{ secrets.AUDIT_TABLE_NAME }}
-          AUDIT_TABLE_DEV_LEGACY: ${{ secrets.AUDIT_TABLE_NAME_DEV }}
           MANAGER_PASSWORD_ENV: ${{ secrets.MANAGER_PASSWORD }}
-          MANAGER_PASSWORD_DEV_LEGACY: ${{ secrets.MANAGER_PASSWORD_DEV }}
           MANAGER_AUTH_SECRET_ENV: ${{ secrets.MANAGER_AUTH_SECRET }}
-          MANAGER_AUTH_SECRET_DEV_LEGACY: ${{ secrets.MANAGER_AUTH_SECRET_DEV }}
           SLACK_WEBHOOK_ENV: ${{ secrets.SLACK_WEBHOOK_URL }}
-          SLACK_WEBHOOK_DEV_LEGACY: ${{ secrets.SLACK_WEBHOOK_URL_DEV }}
           ALARM_EMAIL_ENV: ${{ secrets.ALARM_EMAIL }}
-          ALARM_EMAIL_DEV_LEGACY: ${{ secrets.ALARM_EMAIL_DEV }}
           TF_STATE_BUCKET_VALUE: ${{ secrets.TERRAFORM_STATE_BUCKET }}
           TF_LOCK_TABLE_VALUE: ${{ secrets.TERRAFORM_LOCK_TABLE }}
         run: |
           aws_region="${AWS_REGION_PRIMARY:-us-east-1}"
 
           if [[ "${TARGET_ENVIRONMENT}" == "development" ]]; then
-            role_arn="${ROLE_ARN_ENV:-${ROLE_ARN_DEV_LEGACY:-}}"
-            project_name="${PROJECT_NAME_ENV:-${PROJECT_NAME_DEV_LEGACY:-client-chat-dev}}"
-            complaints_table="${COMPLAINTS_TABLE_ENV:-${COMPLAINTS_TABLE_DEV_LEGACY:-client-chat-dev-complaints}}"
-            audit_table="${AUDIT_TABLE_ENV:-${AUDIT_TABLE_DEV_LEGACY:-client-chat-dev-audit}}"
-            manager_password="${MANAGER_PASSWORD_ENV:-${MANAGER_PASSWORD_DEV_LEGACY:-destroy-placeholder}}"
-            manager_auth_secret="${MANAGER_AUTH_SECRET_ENV:-${MANAGER_AUTH_SECRET_DEV_LEGACY:-destroy-placeholder-secret}}"
-            slack_webhook="${SLACK_WEBHOOK_ENV:-${SLACK_WEBHOOK_DEV_LEGACY:-}}"
-            alarm_email="${ALARM_EMAIL_ENV:-${ALARM_EMAIL_DEV_LEGACY:-}}"
+            role_arn="${ROLE_ARN_ENV:-}"
+            project_name="client-chat-dev"
+            complaints_table="${project_name}-complaints"
+            audit_table="${project_name}-audit"
+            manager_password="${MANAGER_PASSWORD_ENV:-destroy-placeholder}"
+            manager_auth_secret="${MANAGER_AUTH_SECRET_ENV:-destroy-placeholder-secret}"
+            slack_webhook="${SLACK_WEBHOOK_ENV:-}"
+            alarm_email="${ALARM_EMAIL_ENV:-}"
             session_name="client-chat-dev-github-actions"
           else
             role_arn="${ROLE_ARN_ENV:-}"
-            project_name="${PROJECT_NAME_ENV:-client-chat}"
-            complaints_table="${COMPLAINTS_TABLE_ENV:-client-chat-complaints}"
-            audit_table="${AUDIT_TABLE_ENV:-client-chat-audit}"
+            project_name="client-chat"
+            complaints_table="${project_name}-complaints"
+            audit_table="${project_name}-audit"
             manager_password="${MANAGER_PASSWORD_ENV:-destroy-placeholder}"
             manager_auth_secret="${MANAGER_AUTH_SECRET_ENV:-destroy-placeholder-secret}"
             slack_webhook="${SLACK_WEBHOOK_ENV:-}"

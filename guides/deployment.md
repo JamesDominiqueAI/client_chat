@@ -65,26 +65,24 @@ Required GitHub secrets and environment configuration:
   - `TERRAFORM_LOCK_TABLE`
 - development environment
   - `AWS_ROLE_ARN`
-  - `PROJECT_NAME`
-  - `COMPLAINTS_TABLE_NAME`
-  - `AUDIT_TABLE_NAME`
   - `MANAGER_PASSWORD`
   - `MANAGER_AUTH_SECRET`
-  - `SLACK_WEBHOOK_URL`
-  - `ALARM_EMAIL`
 - production environment
   - `AWS_ROLE_ARN`
-  - `PROJECT_NAME`
-  - `COMPLAINTS_TABLE_NAME`
-  - `AUDIT_TABLE_NAME`
   - `MANAGER_PASSWORD`
   - `MANAGER_AUTH_SECRET`
-  - `SLACK_WEBHOOK_URL`
-  - `ALARM_EMAIL`
 
 Remote state matters here. The deploy and destroy workflows run on fresh GitHub-hosted runners, so Terraform state must live in S3 with DynamoDB locking instead of staying local to the runner.
 
-Legacy `*_DEV` names are still supported as fallback, but the preferred setup is environment-scoped secrets with identical names across `development` and `production`.
+Optional environment secrets:
+
+- `SLACK_WEBHOOK_URL`
+- `ALARM_EMAIL`
+
+Project and table naming are derived from the environment:
+
+- `development` -> `client-chat-dev`, `client-chat-dev-complaints`, `client-chat-dev-audit`
+- `production` -> `client-chat`, `client-chat-complaints`, `client-chat-audit`
 
 ## Container Deployment
 

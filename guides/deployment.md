@@ -51,16 +51,18 @@ For the AWS-native deployment path:
 
 ## GitHub Actions CI/CD
 
-The repo uses a single workflow, modeled after `supplychain-ai`:
+The repo uses separate workflows, modeled after `digital_twin`:
 
-- `pull_request`: backend tests, frontend production build, static export build, Terraform formatting check
-- `push` to `main`: automatic AWS deployment to the `development` GitHub environment
-- `workflow_dispatch`: manual deployment to either `development` or `production`
+- `.github/workflows/ci-cd.yml`: backend tests, frontend production build, static export build, Terraform formatting check
+- `.github/workflows/deploy.yml`: automatic `development` deploy on `main` pushes plus manual `development` or `production` deployment
+- `.github/workflows/destroy.yml`: manual environment destruction with typed confirmation
 
 Required GitHub secrets and environment configuration:
 
 - shared or repeated values
   - `DEFAULT_AWS_REGION`
+  - `TERRAFORM_STATE_BUCKET`
+  - `TERRAFORM_LOCK_TABLE`
 - development environment
   - `AWS_ROLE_ARN_DEV`
   - `PROJECT_NAME_DEV`
@@ -70,7 +72,6 @@ Required GitHub secrets and environment configuration:
   - `MANAGER_AUTH_SECRET_DEV`
   - `SLACK_WEBHOOK_URL_DEV`
   - `ALARM_EMAIL_DEV`
-  - `DEV_API_BASE_URL`
 - production environment
   - `AWS_ROLE_ARN`
   - `PROJECT_NAME`
@@ -80,7 +81,8 @@ Required GitHub secrets and environment configuration:
   - `MANAGER_AUTH_SECRET`
   - `SLACK_WEBHOOK_URL`
   - `ALARM_EMAIL`
-  - `PROD_API_BASE_URL`
+
+Remote state matters here. The deploy and destroy workflows run on fresh GitHub-hosted runners, so Terraform state must live in S3 with DynamoDB locking instead of staying local to the runner.
 
 ## Container Deployment
 

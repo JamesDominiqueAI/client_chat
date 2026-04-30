@@ -159,15 +159,18 @@ That script packages the Lambda, applies the Terraform phases, builds the static
 
 ## GitHub Actions
 
-The repo now follows the `supplychain-ai` workflow model with a single entrypoint workflow:
+The repo now follows the `digital_twin` workflow shape with separate CI, deploy, and destroy workflows:
 
 - `.github/workflows/ci-cd.yml`
+- `.github/workflows/deploy.yml`
+- `.github/workflows/destroy.yml`
 
 Behavior:
 
-- pull requests run backend tests, frontend build, static export build, and Terraform formatting checks
+- pull requests and pushes run backend tests, frontend build, static export build, and Terraform formatting checks
 - pushes to `main` automatically deploy the `development` GitHub environment to AWS
 - manual `workflow_dispatch` deploys either `development` or `production`
+- manual destroy requires explicit environment confirmation
 
 Required GitHub environment secrets:
 
@@ -181,7 +184,6 @@ Required GitHub environment secrets:
   - `MANAGER_AUTH_SECRET_DEV`
   - `SLACK_WEBHOOK_URL_DEV`
   - `ALARM_EMAIL_DEV`
-  - `DEV_API_BASE_URL`
 - `production`
   - `AWS_ROLE_ARN`
   - `DEFAULT_AWS_REGION`
@@ -192,7 +194,11 @@ Required GitHub environment secrets:
   - `MANAGER_AUTH_SECRET`
   - `SLACK_WEBHOOK_URL`
   - `ALARM_EMAIL`
-  - `PROD_API_BASE_URL`
+- shared
+  - `TERRAFORM_STATE_BUCKET`
+  - `TERRAFORM_LOCK_TABLE`
+
+The deploy and destroy workflows use remote Terraform state in S3 plus a DynamoDB lock table. Without those two secrets, GitHub-hosted deploy and destroy runs will not work reliably across fresh runners.
 
 ## Demo Prompts
 

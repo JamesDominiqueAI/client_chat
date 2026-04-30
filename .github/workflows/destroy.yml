@@ -1,0 +1,146 @@
+name: Destroy Client Chat Environment
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Environment to destroy"
+        required: true
+        type: choice
+        options:
+          - development
+          - production
+      confirm:
+        description: "Type the environment name to confirm destruction"
+        required: true
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  destroy:
+    name: Destroy ${{ github.event.inputs.environment }}
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment }}
+    steps:
+      - name: Verify confirmation
+        run: |
+          if [[ "${{ github.event.inputs.confirm }}" != "${{ github.event.inputs.environment }}" ]]; then
+            echo "::error::Confirmation does not match environment name."
+            echo "You entered: '${{ github.event.inputs.confirm }}'"
+            echo "Expected: '${{ github.event.inputs.environment }}'"
+            exit 1
+          fi
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Resolve destroy configuration
+        id: destroy_config
+        env:
+          TARGET_ENVIRONMENT: ${{ github.event.inputs.environment }}
+          ROLE_ARN_DEV: ${{ secrets.AWS_ROLE_ARN_DEV }}
+          ROLE_ARN_PROD: ${{ secrets.AWS_ROLE_ARN }}
+          AWS_REGION_PRIMARY: ${{ secrets.DEFAULT_AWS_REGION }}
+          PROJECT_NAME_DEV: ${{ secrets.PROJECT_NAME_DEV }}
+          PROJECT_NAME_PROD: ${{ secrets.PROJECT_NAME }}
+          COMPLAINTS_TABLE_DEV: ${{ secrets.COMPLAINTS_TABLE_NAME_DEV }}
+          COMPLAINTS_TABLE_PROD: ${{ secrets.COMPLAINTS_TABLE_NAME }}
+          AUDIT_TABLE_DEV: ${{ secrets.AUDIT_TABLE_NAME_DEV }}
+          AUDIT_TABLE_PROD: ${{ secrets.AUDIT_TABLE_NAME }}
+          MANAGER_PASSWORD_DEV: ${{ secrets.MANAGER_PASSWORD_DEV }}
+          MANAGER_PASSWORD_PROD: ${{ secrets.MANAGER_PASSWORD }}
+          MANAGER_AUTH_SECRET_DEV: ${{ secrets.MANAGER_AUTH_SECRET_DEV }}
+          MANAGER_AUTH_SECRET_PROD: ${{ secrets.MANAGER_AUTH_SECRET }}
+          SLACK_WEBHOOK_DEV: ${{ secrets.SLACK_WEBHOOK_URL_DEV }}
+          SLACK_WEBHOOK_PROD: ${{ secrets.SLACK_WEBHOOK_URL }}
+          ALARM_EMAIL_DEV: ${{ secrets.ALARM_EMAIL_DEV }}
+          ALARM_EMAIL_PROD: ${{ secrets.ALARM_EMAIL }}
+          TF_STATE_BUCKET_VALUE: ${{ secrets.TERRAFORM_STATE_BUCKET }}
+          TF_LOCK_TABLE_VALUE: ${{ secrets.TERRAFORM_LOCK_TABLE }}
+        run: |
+          aws_region="${AWS_REGION_PRIMARY:-us-east-1}"
+
+          if [[ "${TARGET_ENVIRONMENT}" == "development" ]]; then
+            role_arn="${ROLE_ARN_DEV:-${ROLE_ARN_PROD:-}}"
+            project_name="${PROJECT_NAME_DEV:-client-chat-dev}"
+            complaints_table="${COMPLAINTS_TABLE_DEV:-client-chat-dev-complaints}"
+            audit_table="${AUDIT_TABLE_DEV:-client-chat-dev-audit}"
+            manager_password="${MANAGER_PASSWORD_DEV:-destroy-placeholder}"
+            manager_auth_secret="${MANAGER_AUTH_SECRET_DEV:-destroy-placeholder-secret}"
+            slack_webhook="${SLACK_WEBHOOK_DEV:-}"
+            alarm_email="${ALARM_EMAIL_DEV:-}"
+            session_name="client-chat-dev-github-actions"
+          else
+            role_arn="${ROLE_ARN_PROD:-}"
+            project_name="${PROJECT_NAME_PROD:-client-chat}"
+            complaints_table="${COMPLAINTS_TABLE_PROD:-client-chat-complaints}"
+            audit_table="${AUDIT_TABLE_PROD:-client-chat-audit}"
+            manager_password="${MANAGER_PASSWORD_PROD:-destroy-placeholder}"
+            manager_auth_secret="${MANAGER_AUTH_SECRET_PROD:-destroy-placeholder-secret}"
+            slack_webhook="${SLACK_WEBHOOK_PROD:-}"
+            alarm_email="${ALARM_EMAIL_PROD:-}"
+            session_name="client-chat-prod-github-actions"
+          fi
+
+          if [[ -z "$role_arn" ]]; then
+            echo "::error::Missing AWS role ARN for ${TARGET_ENVIRONMENT}. Set AWS_ROLE_ARN_DEV or AWS_ROLE_ARN as appropriate."
+            exit 1
+          fi
+
+          if [[ -z "${TF_STATE_BUCKET_VALUE:-}" ]]; then
+            echo "::error::Missing TERRAFORM_STATE_BUCKET secret."
+            exit 1
+          fi
+
+          if [[ -z "${TF_LOCK_TABLE_VALUE:-}" ]]; then
+            echo "::error::Missing TERRAFORM_LOCK_TABLE secret."
+            exit 1
+          fi
+
+          {
+            echo "target_environment=$TARGET_ENVIRONMENT"
+            echo "role_arn=$role_arn"
+            echo "aws_region=$aws_region"
+            echo "project_name=$project_name"
+            echo "complaints_table=$complaints_table"
+            echo "audit_table=$audit_table"
+            echo "manager_password=$manager_password"
+            echo "manager_auth_secret=$manager_auth_secret"
+            echo "slack_webhook=$slack_webhook"
+            echo "alarm_email=$alarm_email"
+            echo "tf_state_bucket=${TF_STATE_BUCKET_VALUE}"
+            echo "tf_lock_table=${TF_LOCK_TABLE_VALUE}"
+            echo "session_name=$session_name"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ steps.destroy_config.outputs.role_arn }}
+          role-session-name: ${{ steps.destroy_config.outputs.session_name }}
+          aws-region: ${{ steps.destroy_config.outputs.aws_region }}
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: Run destroy script
+        env:
+          DEFAULT_AWS_REGION: ${{ steps.destroy_config.outputs.aws_region }}
+          PROJECT_NAME: ${{ steps.destroy_config.outputs.project_name }}
+          COMPLAINTS_TABLE_NAME: ${{ steps.destroy_config.outputs.complaints_table }}
+          AUDIT_TABLE_NAME: ${{ steps.destroy_config.outputs.audit_table }}
+          MANAGER_PASSWORD: ${{ steps.destroy_config.outputs.manager_password }}
+          MANAGER_AUTH_SECRET: ${{ steps.destroy_config.outputs.manager_auth_secret }}
+          SLACK_WEBHOOK_URL: ${{ steps.destroy_config.outputs.slack_webhook }}
+          ALARM_EMAIL: ${{ steps.destroy_config.outputs.alarm_email }}
+          DEPLOY_ENVIRONMENT: ${{ steps.destroy_config.outputs.target_environment }}
+          TERRAFORM_STATE_BUCKET: ${{ steps.destroy_config.outputs.tf_state_bucket }}
+          TERRAFORM_LOCK_TABLE: ${{ steps.destroy_config.outputs.tf_lock_table }}
+        run: bash scripts/destroy_aws.sh
+
+      - name: Destruction Summary
+        run: echo "Environment ${{ github.event.inputs.environment }} destroyed."

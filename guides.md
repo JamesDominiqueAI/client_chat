@@ -152,7 +152,9 @@ Use these files when explaining production readiness:
 - `guides/deployment.md`: deployment model.
 - `guides/production_ai_chatbot_playbook.md`: production-grade AI chatbot playbook.
 - `backend/tests/test_mcp_tools.py`: test coverage for tools, routing, fallbacks, and guardrails.
-- `.github/workflows/ci-cd.yml`: CI plus AWS development and production deployment workflow.
+- `.github/workflows/ci-cd.yml`: CI workflow.
+- `.github/workflows/deploy.yml`: AWS deployment workflow modeled after `digital_twin`.
+- `.github/workflows/destroy.yml`: AWS destroy workflow with explicit confirmation.
 
 ## Verification Commands
 
@@ -278,7 +280,7 @@ Show in order:
 
 1. GitHub repo.
 2. README with links.
-3. GitHub Actions CI and AWS deployment pipeline.
+3. GitHub Actions CI, deploy, and destroy workflows.
 4. Live CloudFront frontend.
 5. Chat prompt for urgent complaints.
 6. Chat prompt for manager report.
@@ -302,7 +304,7 @@ Close with:
 - Authentication is simple signed-token manager auth, not Clerk/Auth0/RBAC.
 - Observability is persistent SQLite audit events, not LangSmith/Langfuse/OpenTelemetry.
 - Slack can be connected with `SLACK_WEBHOOK_URL`; CRM, ticketing, status, and email still need real service wiring.
-- GitHub Actions handles CI, automatic development deployment on `main`, and manual development or production deployment through AWS.
+- GitHub Actions handles CI separately from AWS deployment and destruction. Deployment uses remote Terraform state in S3 with DynamoDB locking.
 
 ## Next Production Improvements
 

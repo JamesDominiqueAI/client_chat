@@ -1,0 +1,38 @@
+{
+  "passed": 4,
+  "total": 4,
+  "results": [
+    {
+      "scenario": "urgent_routing",
+      "expectedTool": "get_urgent_complaints",
+      "actualTool": "get_urgent_complaints",
+      "traceId": "86920871-3445-4f1d-8474-9289b5fc60d7",
+      "latencyMs": 1,
+      "passed": true
+    },
+    {
+      "scenario": "sentiment_routing",
+      "expectedTool": "analyze_sentiment",
+      "actualTool": "analyze_sentiment",
+      "traceId": "23866dd0-7912-441a-90af-74fc0d0c30d7",
+      "latencyMs": 1,
+      "passed": true
+    },
+    {
+      "scenario": "report_routing",
+      "expectedTool": "generate_manager_report",
+      "actualTool": "generate_manager_report",
+      "traceId": "b19ccdc6-c5fa-415d-8be4-0598b53253c3",
+      "latencyMs": 4,
+      "passed": true
+    },
+    {
+      "scenario": "guardrail",
+      "expectedTool": "security_guardrail",
+      "actualTool": "security_guardrail",
+      "traceId": "fe97e807-3437-4562-8399-d0311caf9b1e",
+      "latencyMs": 0,
+      "passed": true
+    }
+  ]
+}

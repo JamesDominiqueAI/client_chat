@@ -21,6 +21,14 @@ export type ChatResponse = {
   source: string;
   traceId: string;
   latencyMs: number;
+  sessionId: string;
+  discoveredTools: Array<{
+    tool: string;
+    name: string;
+    connection: "internal" | "external";
+    description: string;
+    score: number;
+  }>;
 };
 
 export type ObservabilityMetrics = {
@@ -55,6 +63,19 @@ export type ObservabilityMetrics = {
     guarded: boolean;
     createdAt: string;
   }>;
+  traces: {
+    status: {
+      openTelemetryAvailable: boolean;
+      consoleExporterEnabled: boolean;
+      recentSpanCount: number;
+    };
+    recentSpans: Array<{
+      name: string;
+      traceId: string;
+      durationMs: number;
+      attributes: Record<string, unknown>;
+    }>;
+  };
   notes: string[];
 };
 
@@ -84,10 +105,26 @@ export async function fetchJson<T>(path: string, init?: RequestInit): Promise<T>
   return response.json() as Promise<T>;
 }
 
-export function exportUrl() {
-  return `${API_BASE}/api/export.csv`;
+export function authHeaders(token: string) {
+  return token ? ({ Authorization: `Bearer ${token}` } as Record<string, string>) : ({} as Record<string, string>);
 }
 
-export function reportUrl() {
-  return `${API_BASE}/api/report.md`;
+export function exportUrl(token: string) {
+  const url = new URL(`${API_BASE}/api/export.csv`);
+  if (token) {
+    url.searchParams.set("token", token);
+  }
+  return url.toString();
+}
+
+export function reportUrl(token: string) {
+  const url = new URL(`${API_BASE}/api/report.md`);
+  if (token) {
+    url.searchParams.set("token", token);
+  }
+  return url.toString();
+}
+
+export function createSessionId() {
+  return `session-${Math.random().toString(36).slice(2)}-${Date.now()}`;
 }

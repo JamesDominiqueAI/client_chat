@@ -72,6 +72,19 @@ Required GitHub secret or variable values:
 - `DEFAULT_AWS_REGION`
 - `TERRAFORM_STATE_BUCKET`
 
+## Manager Workspace Boundary
+
+The deployed workspace is manager-authenticated by default. After login, the frontend uses the bearer token for:
+
+- `/api/chat`
+- `/api/complaints`
+- `/api/integrations`
+- `/api/observability/metrics`
+- `/api/export.csv`
+- `/api/report.md`
+
+This keeps the support workspace aligned with least-privilege expectations instead of exposing it publicly.
+
 ## Bootstrap First
 
 GitHub cannot create `AWS_ROLE_ARN` before it can already authenticate to AWS. Bootstrap those resources once locally with your existing AWS credentials:

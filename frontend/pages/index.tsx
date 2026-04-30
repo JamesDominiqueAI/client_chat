@@ -2,7 +2,7 @@ import Head from "next/head";
 import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 
 import { ChatBox } from "../components/ChatBox";
-import { Complaint, exportUrl, fetchJson, IntegrationStatus, ObservabilityMetrics, reportUrl } from "../lib/api";
+import { authHeaders, Complaint, exportUrl, fetchJson, IntegrationStatus, ObservabilityMetrics, reportUrl } from "../lib/api";
 
 export default function Home() {
   const [complaints, setComplaints] = useState<Complaint[]>([]);
@@ -18,16 +18,29 @@ export default function Home() {
   const [adminError, setAdminError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchJson<Complaint[]>("/api/complaints")
-      .then(setComplaints)
-      .catch((err) => setError(err instanceof Error ? err.message : "Unable to load complaints."));
     setAuthToken(window.localStorage.getItem("managerToken") || "");
   }, []);
+
+  useEffect(() => {
+    if (!authToken) {
+      setComplaints([]);
+      setMetrics(null);
+      setIntegrations([]);
+      return;
+    }
+    fetchJson<Complaint[]>("/api/complaints", { headers: authHeaders(authToken) })
+      .then(setComplaints)
+      .catch((err) => setError(err instanceof Error ? err.message : "Unable to load complaints."));
+  }, [authToken]);
 
   async function refreshMetrics() {
     try {
       setMetricsError(null);
-      const result = await fetchJson<ObservabilityMetrics>("/api/observability/metrics");
+      if (!authToken) {
+        setMetrics(null);
+        return;
+      }
+      const result = await fetchJson<ObservabilityMetrics>("/api/observability/metrics", { headers: authHeaders(authToken) });
       setMetrics(result);
     } catch (err) {
       setMetricsError(err instanceof Error ? err.message : "Unable to load metrics.");
@@ -36,10 +49,14 @@ export default function Home() {
 
   useEffect(() => {
     void refreshMetrics();
-    fetchJson<{ integrations: IntegrationStatus[] }>("/api/integrations")
+    if (!authToken) {
+      setIntegrations([]);
+      return;
+    }
+    fetchJson<{ integrations: IntegrationStatus[] }>("/api/integrations", { headers: authHeaders(authToken) })
       .then((result) => setIntegrations(result.integrations))
       .catch(() => setIntegrations([]));
-  }, []);
+  }, [authToken]);
 
   async function login(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -70,13 +87,11 @@ export default function Home() {
       const csvText = await file.text();
       const result = await fetchJson<{ imported: number; message: string }>("/api/complaints/import", {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${authToken}`,
-        },
+        headers: authHeaders(authToken),
         body: JSON.stringify({ csvText }),
       });
       setAdminMessage(result.message);
-      setComplaints(await fetchJson<Complaint[]>("/api/complaints"));
+      setComplaints(await fetchJson<Complaint[]>("/api/complaints", { headers: authHeaders(authToken) }));
       await refreshMetrics();
     } catch (err) {
       setAdminError(err instanceof Error ? err.message : "CSV import failed.");
@@ -113,10 +128,10 @@ export default function Home() {
               <a className="button primary" href="#chat">
                 Open chat
               </a>
-              <a className="button" href={exportUrl()}>
+              <a className={`button ${authToken ? "" : "disabled"}`} href={authToken ? exportUrl(authToken) : "#admin"}>
                 Export CSV
               </a>
-              <a className="button" href={reportUrl()}>
+              <a className={`button ${authToken ? "" : "disabled"}`} href={authToken ? reportUrl(authToken) : "#admin"}>
                 Download report
               </a>
             </div>
@@ -138,7 +153,7 @@ export default function Home() {
         </section>
 
         <section id="chat" className="page-section">
-          <ChatBox />
+          <ChatBox authToken={authToken} />
         </section>
 
         <section className="page-section">
@@ -184,7 +199,9 @@ export default function Home() {
           <div className="production-grid">
             <article className="production-panel">
               <h3>Recent tool events</h3>
-              {metrics?.recentEvents.length ? (
+              {!authToken ? (
+                <p className="muted">Manager login is required to view traces and MCP activity.</p>
+              ) : metrics?.recentEvents.length ? (
                 <div className="event-list">
                   {metrics.recentEvents
                     .slice()
@@ -203,19 +220,43 @@ export default function Home() {
             </article>
 
             <article className="production-panel">
+              <h3>Trace spans</h3>
+              {!authToken ? (
+                <p className="muted">Manager login is required to inspect traces.</p>
+              ) : metrics?.traces.recentSpans.length ? (
+                <div className="event-list">
+                  {metrics.traces.recentSpans
+                    .slice()
+                    .reverse()
+                    .map((span) => (
+                      <div key={`${span.traceId}-${span.name}`}>
+                        <span>{span.name}</span>
+                        <strong>{span.durationMs} ms</strong>
+                        <small>{span.traceId.slice(0, 8)}</small>
+                      </div>
+                    ))}
+                </div>
+              ) : (
+                <p className="muted">Run a chat prompt to generate OpenTelemetry-style spans.</p>
+              )}
+            </article>
+
+            <article className="production-panel">
               <h3>Demo readiness</h3>
               <ul className="readiness-list">
                 <li>10 MCP servers are registered: 5 internal analysis servers and 5 external integration servers.</li>
-                <li>MCP tool route returns tool, source, trace, and latency metadata.</li>
+                <li>MCP tool route returns tool, source, trace, session, and latency metadata.</li>
                 <li>Security prompt routes to `security_guardrail` without exposing private data.</li>
                 <li>CRM, ticketing, status, Slack, and email adapters fail safely when unconfigured.</li>
                 <li>CSV and markdown report downloads use the same complaint dataset as chat.</li>
+                <li>OpenTelemetry-style recent spans are exposed in observability metrics.</li>
+                <li>The manager workspace is authenticated by default instead of being fully public.</li>
               </ul>
               <div className="hero-actions">
-                <a className="button" href={exportUrl()}>
+                <a className={`button ${authToken ? "" : "disabled"}`} href={authToken ? exportUrl(authToken) : "#admin"}>
                   CSV
                 </a>
-                <a className="button" href={reportUrl()}>
+                <a className={`button ${authToken ? "" : "disabled"}`} href={authToken ? reportUrl(authToken) : "#admin"}>
                   Report
                 </a>
               </div>
@@ -229,7 +270,7 @@ export default function Home() {
             <h2>Manager login, CSV import, and external MCP connection status.</h2>
           </div>
 
-          <div className="admin-grid">
+          <div id="admin" className="admin-grid">
             <article className="production-panel">
               <h3>Manager access</h3>
               {authToken ? (
@@ -269,7 +310,7 @@ export default function Home() {
 
             <article className="production-panel">
               <h3>Complaint import</h3>
-              <p className="muted">Upload a CSV with the export headers to replace the SQLite complaint dataset.</p>
+              <p className="muted">Upload a CSV with the export headers to replace the complaint dataset used by chat, exports, and reports.</p>
               <label className={authToken ? "file-control" : "file-control disabled"}>
                 CSV file
                 <input type="file" accept=".csv,text/csv" disabled={!authToken} onChange={importCsv} />
@@ -320,10 +361,10 @@ export default function Home() {
                 ))}
               </select>
             </label>
-            <a className="button" href={exportUrl()}>
+            <a className={`button ${authToken ? "" : "disabled"}`} href={authToken ? exportUrl(authToken) : "#admin"}>
               Download CSV
             </a>
-            <a className="button" href={reportUrl()}>
+            <a className={`button ${authToken ? "" : "disabled"}`} href={authToken ? reportUrl(authToken) : "#admin"}>
               Download report
             </a>
           </div>

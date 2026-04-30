@@ -11,3 +11,9 @@ dist/
 coverage/
 data/*.db
 data/*.db-*
+frontend/tsconfig.tsbuildinfo
+terraform/**/.terraform/
+terraform/**/terraform.tfstate
+terraform/**/terraform.tfstate.backup
+terraform/**/terraform.tfvars
+terraform/**/.terraform.lock.hcl

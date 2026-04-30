@@ -1,6 +1,6 @@
 import { FormEvent, useMemo, useState } from "react";
 
-import { ChatResponse, fetchJson } from "../lib/api";
+import { authHeaders, ChatResponse, createSessionId, fetchJson } from "../lib/api";
 
 const demoPrompts = [
   "Summarize today's customer complaints.",
@@ -45,12 +45,24 @@ function formatAnswer(answer: string) {
     });
 }
 
-export function ChatBox() {
+export function ChatBox({ authToken }: { authToken: string }) {
   const [message, setMessage] = useState(demoPrompts[0]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [response, setResponse] = useState<ChatResponse | null>(null);
   const [listening, setListening] = useState(false);
+  const [sessionId] = useState(() => {
+    if (typeof window === "undefined") {
+      return "session-server-render";
+    }
+    const stored = window.localStorage.getItem("chatSessionId");
+    if (stored) {
+      return stored;
+    }
+    const created = createSessionId();
+    window.localStorage.setItem("chatSessionId", created);
+    return created;
+  });
 
   const activity = useMemo(() => {
     if (!response) {
@@ -67,6 +79,7 @@ export function ChatBox() {
       ["Tool", response.tool],
       ["Source", response.source],
       ["Trace", response.traceId.slice(0, 8)],
+      ["Session", response.sessionId.slice(-8)],
       ["Latency", `${response.latencyMs} ms`],
     ];
   }, [response]);
@@ -76,9 +89,13 @@ export function ChatBox() {
     setLoading(true);
     setError(null);
     try {
+      if (!authToken) {
+        throw new Error("Manager login is required for the workspace.");
+      }
       const result = await fetchJson<ChatResponse>("/api/chat", {
         method: "POST",
-        body: JSON.stringify({ message }),
+        headers: authHeaders(authToken),
+        body: JSON.stringify({ message, sessionId }),
       });
       setResponse(result);
     } catch (err) {
@@ -139,6 +156,18 @@ export function ChatBox() {
 
         {error ? <p className="error">{error}</p> : null}
         {response ? <div className="answer">{formatAnswer(response.response)}</div> : null}
+        {response?.discoveredTools?.length ? (
+          <div className="answer">
+            <h3>Discovered MCP tools</h3>
+            <ul>
+              {response.discoveredTools.map((tool) => (
+                <li key={tool.name}>
+                  {tool.name} / {tool.tool} / score {tool.score}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
       </div>
 
       <aside className="activity-panel">

@@ -23,7 +23,9 @@ if str(ROOT) not in sys.path:
 from backend.mcp.server import mcp_registry
 from backend.mcp.tools import TOOL_REGISTRY, export_complaints_csv, generate_manager_report, load_complaints
 from backend.runtime_config import config_value
+from backend.session_store import get_session_state, record_session_turn
 from backend.store import active_store_backend, import_complaints_csv, list_audit_events, now_iso, record_audit_event
+from backend.telemetry import recent_spans, telemetry_status, traced_span
 
 MAX_MESSAGE_LENGTH = 1200
 BLOCKED_PHRASES = [
@@ -61,6 +63,7 @@ def verify_token(token: str) -> bool:
 
 class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=MAX_MESSAGE_LENGTH)
+    sessionId: str = Field(min_length=8, max_length=120)
 
 
 class LoginRequest(BaseModel):
@@ -90,6 +93,8 @@ class ChatResponse(BaseModel):
     source: str
     traceId: str
     latencyMs: int
+    sessionId: str
+    discoveredTools: list[dict[str, Any]] = Field(default_factory=list)
 
 
 app = FastAPI(
@@ -120,32 +125,20 @@ def is_unsafe(message: str) -> bool:
     return any(phrase in lowered for phrase in BLOCKED_PHRASES)
 
 
-def select_tool(message: str) -> str:
+def manager_workspace_auth_required() -> bool:
+    return os.getenv("REQUIRE_MANAGER_AUTH", "1").strip().lower() not in {"0", "false", "no"}
+
+
+def select_tool(message: str, session_id: str) -> tuple[str, list[dict[str, Any]]]:
     lowered = message.lower()
     if is_unsafe(lowered):
-        return "security_guardrail"
-    if "crm" in lowered or "customer record" in lowered:
-        return "lookup_crm_customer"
-    if "ticket" in lowered or "escalation" in lowered:
-        return "create_ticket_escalation"
-    if "service status" in lowered or "status page" in lowered:
-        return "check_service_status"
-    if "slack" in lowered or "team alert" in lowered:
-        return "send_slack_alert"
-    if "email" in lowered or "customers about" in lowered:
-        return "send_customer_email_batch"
-    if "urgent" in lowered or "priority" in lowered:
-        return "get_urgent_complaints"
-    if "sentiment" in lowered or "mood" in lowered:
-        return "analyze_sentiment"
-    if "action plan" in lowered or "next steps" in lowered:
-        return "generate_action_plan"
-    if "report" in lowered or "manager-ready" in lowered:
-        return "generate_manager_report"
-    return "summarize_issues"
+        return "security_guardrail", []
+    session_state = get_session_state(session_id)
+    discovered = mcp_registry.discover(message)
+    return mcp_registry.best_match(message, session_state.last_tool), discovered
 
 
-def run_selected_tool(tool_name: str) -> tuple[str, str, str, str]:
+def run_selected_tool(tool_name: str, trace_id: str) -> tuple[str, str, str, str]:
     if tool_name == "security_guardrail":
         return (
             "security_guardrail",
@@ -154,12 +147,14 @@ def run_selected_tool(tool_name: str) -> tuple[str, str, str, str]:
             "I cannot help with requests to bypass instructions, reveal secrets, or inspect private environment data.",
         )
     try:
-        result = mcp_registry.call_tool(tool_name)
+        with traced_span("mcp.call_tool", trace_id, {"tool": tool_name}):
+            result = mcp_registry.call_tool(tool_name)
         return result.source, result.server, result.connection, result.content
     except Exception:
         if tool_name not in TOOL_REGISTRY:
             raise
-        return "direct", "direct-python-fallback", "internal", TOOL_REGISTRY[tool_name]()
+        with traced_span("tool.direct_fallback", trace_id, {"tool": tool_name}):
+            return "direct", "direct-python-fallback", "internal", TOOL_REGISTRY[tool_name]()
 
 
 def record_chat_event(
@@ -185,11 +180,13 @@ def record_chat_event(
     )
 
 
-def require_manager(authorization: str | None = Header(default=None)) -> None:
-    if not authorization or not authorization.startswith("Bearer "):
+def require_manager(authorization: str | None = None, token: str | None = None) -> None:
+    bearer_token = token
+    if not bearer_token and isinstance(authorization, str) and authorization.startswith("Bearer "):
+        bearer_token = authorization.removeprefix("Bearer ").strip()
+    if not bearer_token:
         raise HTTPException(status_code=401, detail="Manager login is required.")
-    token = authorization.removeprefix("Bearer ").strip()
-    if not verify_token(token):
+    if not verify_token(bearer_token):
         raise HTTPException(status_code=401, detail="Invalid manager token.")
 
 
@@ -213,7 +210,9 @@ async def auth_me(authorization: str | None = Header(default=None)) -> dict[str,
 
 
 @app.get("/api/complaints")
-async def complaints() -> list[dict]:
+async def complaints(authorization: str | None = Header(default=None)) -> list[dict]:
+    if manager_workspace_auth_required():
+        require_manager(authorization)
     return load_complaints()
 
 
@@ -233,7 +232,9 @@ async def import_complaints(payload: ImportRequest, authorization: str | None = 
 
 
 @app.get("/api/export.csv")
-async def export_csv() -> Response:
+async def export_csv(authorization: str | None = Header(default=None), token: str | None = None) -> Response:
+    if manager_workspace_auth_required():
+        require_manager(authorization, token)
     return Response(
         content=export_complaints_csv(),
         media_type="text/csv",
@@ -242,7 +243,9 @@ async def export_csv() -> Response:
 
 
 @app.get("/api/report.md")
-async def export_report() -> Response:
+async def export_report(authorization: str | None = Header(default=None), token: str | None = None) -> Response:
+    if manager_workspace_auth_required():
+        require_manager(authorization, token)
     return Response(
         content=generate_manager_report(),
         media_type="text/markdown",
@@ -251,7 +254,9 @@ async def export_report() -> Response:
 
 
 @app.get("/api/observability/metrics")
-async def observability_metrics() -> dict[str, Any]:
+async def observability_metrics(authorization: str | None = Header(default=None)) -> dict[str, Any]:
+    if manager_workspace_auth_required():
+        require_manager(authorization)
     events = list_audit_events()
     tools = Counter(event["tool"] for event in events)
     servers = Counter(event["mcpServer"] for event in events)
@@ -275,15 +280,21 @@ async def observability_metrics() -> dict[str, Any]:
         },
         "sources": dict(sources),
         "recentEvents": events[-10:],
+        "traces": {
+            "status": telemetry_status(),
+            "recentSpans": recent_spans(),
+        },
         "notes": [
             f"Metrics are persisted through the active {active_store_backend()} store backend.",
-            "Every chat response carries trace, tool, source, and latency metadata.",
+            "Every chat response carries trace, tool, source, latency, and session metadata.",
         ],
     }
 
 
 @app.get("/api/integrations")
-async def integrations() -> dict[str, Any]:
+async def integrations(authorization: str | None = Header(default=None)) -> dict[str, Any]:
+    if manager_workspace_auth_required():
+        require_manager(authorization)
     statuses = [
         {
             "name": "CRM",
@@ -319,16 +330,37 @@ async def integrations() -> dict[str, Any]:
     return {"integrations": statuses}
 
 
+@app.get("/api/mcp/registry")
+async def mcp_registry_view(authorization: str | None = Header(default=None)) -> dict[str, Any]:
+    if manager_workspace_auth_required():
+        require_manager(authorization)
+    return {
+        "counts": mcp_registry.counts(),
+        "servers": mcp_registry.list_servers(),
+    }
+
+
+@app.get("/api/mcp/discover")
+async def mcp_discover(query: str, authorization: str | None = Header(default=None)) -> dict[str, Any]:
+    if manager_workspace_auth_required():
+        require_manager(authorization)
+    return {"query": query, "matches": mcp_registry.discover(query)}
+
+
 @app.post("/api/chat", response_model=ChatResponse)
-async def chat(payload: ChatRequest) -> ChatResponse:
+async def chat(payload: ChatRequest, authorization: str | None = Header(default=None)) -> ChatResponse:
+    if manager_workspace_auth_required():
+        require_manager(authorization)
     start = time.perf_counter()
     trace_id = str(uuid.uuid4())
     message = payload.message.strip()
     if not message:
         raise HTTPException(status_code=422, detail="Message is required.")
-    tool = select_tool(message)
-    source, mcp_server, connection, response = run_selected_tool(tool)
+    tool, discovered = select_tool(message, payload.sessionId)
+    with traced_span("chat.request", trace_id, {"session.id": payload.sessionId, "tool.selected": tool}):
+        source, mcp_server, connection, response = run_selected_tool(tool, trace_id)
     latency_ms = int((time.perf_counter() - start) * 1000)
+    record_session_turn(payload.sessionId, message, tool)
     record_chat_event(
         tool=tool,
         source=source,
@@ -346,6 +378,8 @@ async def chat(payload: ChatRequest) -> ChatResponse:
         source=source,
         traceId=trace_id,
         latencyMs=latency_ms,
+        sessionId=payload.sessionId,
+        discoveredTools=discovered[:3],
     )
 
 

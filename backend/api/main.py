@@ -32,9 +32,13 @@ BLOCKED_PHRASES = [
     "ignore previous instructions",
     "print secrets",
     "show secrets",
+    "show me the",
+    "environment variables",
     ".env",
     "exfiltrate",
     "system prompt",
+    "hidden tokens",
+    "admin access",
 ]
 
 

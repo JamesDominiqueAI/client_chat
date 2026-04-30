@@ -224,32 +224,30 @@ def test_guardrail_variations():
 
 
 def test_edge_case_empty_message():
-    """Test handling of empty message edge case."""
+    """Test handling of empty message edge case - Pydantic should reject before API call."""
+    from pydantic_core import ValidationError
     token = manager_token()
+    caught = False
     try:
-        asyncio.run(
-            chat(
-                ChatRequest(message="", sessionId="session-empty"),
-                authorization=f"Bearer {token}",
-            )
-        )
-    except Exception as exc:
-        assert "422" in str(exc) or "detail" in str(exc)
+        # This should fail at Pydantic validation level, not reach the API
+        ChatRequest(message="", sessionId="session-empty")
+    except ValidationError:
+        caught = True
+    assert caught, "Pydantic should reject empty message"
 
 
 def test_edge_case_very_long_message():
-    """Test handling of very long message edge case."""
+    """Test handling of very long message edge case - Pydantic should reject before API call."""
+    from pydantic_core import ValidationError
     token = manager_token()
     long_message = "Review customer complaints " * 100  # Exceeds MAX_MESSAGE_LENGTH
+    caught = False
     try:
-        asyncio.run(
-            chat(
-                ChatRequest(message=long_message, sessionId="session-long"),
-                authorization=f"Bearer {token}",
-            )
-        )
-    except Exception as exc:
-        assert "422" in str(exc) or "detail" in str(exc) or "max_length" in str(exc).lower()
+        # This should fail at Pydantic validation level, not reach the API
+        ChatRequest(message=long_message, sessionId="session-long")
+    except ValidationError:
+        caught = True
+    assert caught, "Pydantic should reject message exceeding max length"
 
 
 def test_edge_case_sql_injection_attempt():

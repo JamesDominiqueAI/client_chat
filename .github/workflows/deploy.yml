@@ -52,13 +52,10 @@ jobs:
           ALARM_EMAIL_ENV: ${{ secrets.ALARM_EMAIL }}
           TF_STATE_BUCKET_SECRET: ${{ secrets.TERRAFORM_STATE_BUCKET }}
           TF_STATE_BUCKET_VAR: ${{ vars.TERRAFORM_STATE_BUCKET }}
-          TF_LOCK_TABLE_SECRET: ${{ secrets.TERRAFORM_LOCK_TABLE }}
-          TF_LOCK_TABLE_VAR: ${{ vars.TERRAFORM_LOCK_TABLE }}
         run: |
           role_arn_value="${ROLE_ARN_SECRET:-${ROLE_ARN_VAR:-}}"
           aws_region="${AWS_REGION_SECRET:-${AWS_REGION_VAR:-us-east-1}}"
           tf_state_bucket="${TF_STATE_BUCKET_SECRET:-${TF_STATE_BUCKET_VAR:-}}"
-          tf_lock_table="${TF_LOCK_TABLE_SECRET:-${TF_LOCK_TABLE_VAR:-}}"
 
           if [[ "${TARGET_ENVIRONMENT}" == "development" ]]; then
             role_arn="${role_arn_value:-}"
@@ -94,11 +91,6 @@ jobs:
             exit 1
           fi
 
-          if [[ -z "$tf_lock_table" ]]; then
-            echo "::error::Missing TERRAFORM_LOCK_TABLE. Set it as either a GitHub secret or variable."
-            exit 1
-          fi
-
           if [[ -z "$manager_password" ]]; then
             echo "::error::Missing manager password secret for ${missing_secret_hint}."
             exit 1
@@ -121,7 +113,6 @@ jobs:
             echo "slack_webhook=$slack_webhook"
             echo "alarm_email=$alarm_email"
             echo "tf_state_bucket=${tf_state_bucket}"
-            echo "tf_lock_table=${tf_lock_table}"
             echo "session_name=$session_name"
           } >> "$GITHUB_OUTPUT"
 
@@ -168,7 +159,6 @@ jobs:
           ALARM_EMAIL: ${{ steps.deploy_config.outputs.alarm_email }}
           DEPLOY_ENVIRONMENT: ${{ steps.deploy_config.outputs.target_environment }}
           TERRAFORM_STATE_BUCKET: ${{ steps.deploy_config.outputs.tf_state_bucket }}
-          TERRAFORM_LOCK_TABLE: ${{ steps.deploy_config.outputs.tf_lock_table }}
         run: bash scripts/deploy_aws.sh
 
       - name: Get deployment outputs
@@ -177,13 +167,12 @@ jobs:
           AWS_REGION: ${{ steps.deploy_config.outputs.aws_region }}
           DEPLOY_ENVIRONMENT: ${{ steps.deploy_config.outputs.target_environment }}
           TERRAFORM_STATE_BUCKET: ${{ steps.deploy_config.outputs.tf_state_bucket }}
-          TERRAFORM_LOCK_TABLE: ${{ steps.deploy_config.outputs.tf_lock_table }}
         run: |
           terraform -chdir=terraform/4_frontend init -input=false -reconfigure \
             -backend-config="bucket=${TERRAFORM_STATE_BUCKET}" \
             -backend-config="key=${DEPLOY_ENVIRONMENT}/terraform/4_frontend/terraform.tfstate" \
             -backend-config="region=${AWS_REGION}" \
-            -backend-config="dynamodb_table=${TERRAFORM_LOCK_TABLE}" \
+            -backend-config="use_lockfile=true" \
             -backend-config="encrypt=true"
           echo "api_base_url=$(terraform -chdir=terraform/4_frontend output -raw api_base_url)" >> "$GITHUB_OUTPUT"
           echo "cloudfront_domain_name=$(terraform -chdir=terraform/4_frontend output -raw cloudfront_domain_name)" >> "$GITHUB_OUTPUT"

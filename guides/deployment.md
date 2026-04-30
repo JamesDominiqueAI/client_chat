@@ -71,7 +71,6 @@ Required GitHub secret or variable values:
 - `AWS_ROLE_ARN`
 - `DEFAULT_AWS_REGION`
 - `TERRAFORM_STATE_BUCKET`
-- `TERRAFORM_LOCK_TABLE`
 
 ## Bootstrap First
 
@@ -85,7 +84,6 @@ That uses [terraform/bootstrap](/home/ragive/projects/client_chat/terraform/boot
 
 - the GitHub Actions IAM role
 - the Terraform S3 state bucket
-- the Terraform DynamoDB lock table
 
 Copy the resulting outputs into GitHub environments or repository variables after the bootstrap run finishes.
 

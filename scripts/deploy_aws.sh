@@ -10,7 +10,6 @@ AUDIT_TABLE_NAME="${AUDIT_TABLE_NAME:-${PROJECT_NAME}-audit}"
 ALARM_EMAIL="${ALARM_EMAIL:-}"
 DEPLOY_ENVIRONMENT="${DEPLOY_ENVIRONMENT:-development}"
 TERRAFORM_STATE_BUCKET="${TERRAFORM_STATE_BUCKET:-}"
-TERRAFORM_LOCK_TABLE="${TERRAFORM_LOCK_TABLE:-}"
 
 if [[ -f "$ROOT_DIR/.env" ]]; then
   set -a
@@ -23,7 +22,6 @@ required_env=(
   MANAGER_PASSWORD
   MANAGER_AUTH_SECRET
   TERRAFORM_STATE_BUCKET
-  TERRAFORM_LOCK_TABLE
 )
 
 for env_name in "${required_env[@]}"; do
@@ -40,7 +38,7 @@ terraform_init() {
     -backend-config="bucket=${TERRAFORM_STATE_BUCKET}" \
     -backend-config="key=${DEPLOY_ENVIRONMENT}/${phase_dir}/terraform.tfstate" \
     -backend-config="region=${AWS_REGION}" \
-    -backend-config="dynamodb_table=${TERRAFORM_LOCK_TABLE}" \
+    -backend-config="use_lockfile=true" \
     -backend-config="encrypt=true"
 }
 

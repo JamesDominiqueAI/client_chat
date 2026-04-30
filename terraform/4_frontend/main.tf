@@ -96,7 +96,7 @@ data "aws_iam_policy_document" "api_lambda_runtime" {
 resource "aws_iam_role_policy" "api_lambda_runtime" {
   name   = "${var.project_name}-api-lambda-runtime"
   role   = aws_iam_role.api_lambda.id
-  policy = data.aws_iam_policy_document.api_lambda_runtime.json
+  policy = data.aws_iam_policy_document.api_lambda_runtime.minified_json
 }
 
 resource "aws_lambda_function" "api" {

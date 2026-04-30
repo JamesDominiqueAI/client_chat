@@ -9,6 +9,7 @@ from collections import Counter
 from io import StringIO
 from typing import Any
 
+from backend.runtime_config import config_value
 from backend.store import list_complaints
 
 
@@ -110,7 +111,7 @@ def check_service_status() -> str:
 
 def send_slack_alert() -> str:
     urgent_ids = [item["id"] for item in load_complaints() if item["priority"] == "urgent" and item["status"] == "open"]
-    webhook_url = os.getenv("SLACK_WEBHOOK_URL", "").strip()
+    webhook_url = config_value("SLACK_WEBHOOK_URL", "SLACK_WEBHOOK_URL_PARAM", "")
     message = "Customer Report Agent urgent complaint alert: " + (", ".join(urgent_ids) if urgent_ids else "no urgent open complaints")
     if not webhook_url:
         return "Slack adapter is not configured. Would alert the support-manager channel with urgent complaint IDs."

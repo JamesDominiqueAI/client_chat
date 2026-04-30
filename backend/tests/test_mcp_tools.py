@@ -14,9 +14,10 @@ from backend.api.main import (
     observability_metrics,
     select_tool,
 )
+from backend.api.lambda_handler import handler
 from backend.mcp.server import mcp_registry
 from backend.mcp.tools import analyze_sentiment, generate_manager_report, get_urgent_complaints, summarize_issues
-from backend.store import DATA_PATH, replace_complaints
+from backend.store import DATA_PATH, active_store_backend, replace_complaints
 
 
 def test_select_tool_routes_core_requests():
@@ -61,6 +62,7 @@ def test_observability_metrics_tracks_chat_events():
     asyncio.run(chat(ChatRequest(message="Show only urgent complaints.")))
     body = asyncio.run(observability_metrics())
     assert body["requests"]["total"] >= 1
+    assert body["storage"]["backend"] == active_store_backend()
     assert "get_urgent_complaints" in body["tools"]
     assert body["mcpServers"]["counts"] == {"total": 10, "internal": 5, "external": 5}
     assert body["recentEvents"][-1]["traceId"]
@@ -99,6 +101,10 @@ def test_integration_statuses_include_slack_mcp_server():
     body = asyncio.run(integrations())
     names = {item["mcpServer"] for item in body["integrations"]}
     assert "external-slack-mcp" in names
+
+
+def test_lambda_handler_is_available_for_api_gateway():
+    assert handler is not None
 
 
 def load_seed_and_restore() -> int:

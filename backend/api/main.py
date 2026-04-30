@@ -22,7 +22,8 @@ if str(ROOT) not in sys.path:
 
 from backend.mcp.server import mcp_registry
 from backend.mcp.tools import TOOL_REGISTRY, export_complaints_csv, generate_manager_report, load_complaints
-from backend.store import import_complaints_csv, list_audit_events, now_iso, record_audit_event
+from backend.runtime_config import config_value
+from backend.store import active_store_backend, import_complaints_csv, list_audit_events, now_iso, record_audit_event
 
 MAX_MESSAGE_LENGTH = 1200
 BLOCKED_PHRASES = [
@@ -36,11 +37,11 @@ BLOCKED_PHRASES = [
 
 
 def auth_secret() -> str:
-    return os.getenv("MANAGER_AUTH_SECRET") or os.getenv("MANAGER_PASSWORD") or "change-me-local-demo-secret"
+    return config_value("MANAGER_AUTH_SECRET", "MANAGER_AUTH_SECRET_PARAM", "") or manager_password() or "change-me-local-demo-secret"
 
 
 def manager_password() -> str:
-    return os.getenv("MANAGER_PASSWORD", "manager-demo")
+    return config_value("MANAGER_PASSWORD", "MANAGER_PASSWORD_PARAM", "manager-demo")
 
 
 def sign_token(payload: str) -> str:
@@ -78,6 +79,7 @@ class ImportRequest(BaseModel):
 class ImportResponse(BaseModel):
     imported: int
     message: str
+    storeBackend: str
 
 
 class ChatResponse(BaseModel):
@@ -96,10 +98,17 @@ app = FastAPI(
     version="0.1.0",
 )
 
+
+def cors_origins() -> list[str]:
+    configured = os.getenv("CORS_ORIGINS", "").strip()
+    if configured:
+        return [origin.strip() for origin in configured.split(",") if origin.strip()]
+    return ["http://localhost:3000", "http://127.0.0.1:3000"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
-    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
+    allow_origins=cors_origins(),
+    allow_origin_regex=r"^https?://((localhost|127\.0\.0\.1)(:\d+)?|.+\.cloudfront\.net)$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -215,7 +224,12 @@ async def import_complaints(payload: ImportRequest, authorization: str | None = 
         imported = import_complaints_csv(payload.csvText)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    return ImportResponse(imported=imported, message=f"Imported {imported} complaints into SQLite.")
+    backend = active_store_backend()
+    return ImportResponse(
+        imported=imported,
+        message=f"Imported {imported} complaints into {backend}.",
+        storeBackend=backend,
+    )
 
 
 @app.get("/api/export.csv")
@@ -250,6 +264,9 @@ async def observability_metrics() -> dict[str, Any]:
             "guarded": sum(1 for event in events if event["guarded"]),
             "p95LatencyMs": latencies[max(p95_index, 0)] if latencies else 0,
         },
+        "storage": {
+            "backend": active_store_backend(),
+        },
         "tools": dict(tools),
         "mcpServers": {
             "counts": mcp_registry.counts(),
@@ -259,7 +276,7 @@ async def observability_metrics() -> dict[str, Any]:
         "sources": dict(sources),
         "recentEvents": events[-10:],
         "notes": [
-            "Metrics are persisted in the local SQLite audit_events table.",
+            f"Metrics are persisted through the active {active_store_backend()} store backend.",
             "Every chat response carries trace, tool, source, and latency metadata.",
         ],
     }

@@ -14,6 +14,8 @@ The implementation follows the same production shape as the reference project:
 - persistent SQLite complaint storage and audit events
 - manager login for CSV import and admin actions
 - real Slack webhook support through `SLACK_WEBHOOK_URL`
+- Lambda + Mangum entrypoint for AWS deployment
+- DynamoDB store support for complaints and audit events
 - observability metrics for tool usage, source, guardrail, and latency review
 - tests for routing, tools, adapters, and guardrails
 
@@ -28,7 +30,7 @@ User text/voice
   -> backend/mcp/server.py registry
   -> one of 10 named MCP servers
   -> backend/mcp/tools.py
-  -> data/complaints.json
+  -> SQLite locally or DynamoDB on AWS
   -> markdown response + MCP server/tool/source/trace/latency
 ```
 
@@ -38,6 +40,7 @@ User text/voice
 - [Architecture](guides/architecture.md)
 - [Deployment](guides/deployment.md)
 - [AWS App Runner Deployment](guides/aws_apprunner_deployment.md)
+- [Terraform AWS Deployment](terraform/README.md)
 
 ## MCP Servers And Tools
 
@@ -96,6 +99,18 @@ manager-demo
 
 Set `MANAGER_PASSWORD` and `MANAGER_AUTH_SECRET` before a real deployment.
 
+Local store default:
+
+```text
+STORE_BACKEND=sqlite
+```
+
+AWS store target:
+
+```text
+STORE_BACKEND=dynamodb
+```
+
 ## Real Slack MCP Connection
 
 The `external-slack-mcp` server sends a live Slack alert when `SLACK_WEBHOOK_URL` is configured. Without that variable, it returns a safe deterministic "not configured" response.
@@ -121,6 +136,45 @@ docker compose up --build
 ```
 
 Then open `http://localhost:3000`. The backend is exposed at `http://localhost:8010`.
+
+## AWS Lambda And Terraform
+
+The repo now supports the AWS-native path:
+
+- CloudFront
+- S3 static frontend
+- API Gateway HTTP API
+- Lambda FastAPI app using Mangum
+- DynamoDB complaints and audit tables
+- Terraform provisioning
+- SSM-backed runtime secrets
+
+Package Lambda:
+
+```bash
+./scripts/aws/package_lambda.sh
+```
+
+Build static frontend:
+
+```bash
+cd frontend
+STATIC_EXPORT=1 NEXT_PUBLIC_API_URL="https://your-api-id.execute-api.us-east-1.amazonaws.com" npm run build
+```
+
+Provision AWS resources:
+
+```bash
+cd terraform
+terraform init
+terraform apply
+```
+
+Publish the frontend to S3 and invalidate CloudFront:
+
+```bash
+./scripts/aws/publish_frontend.sh
+```
 
 ## Demo Prompts
 
@@ -161,11 +215,14 @@ Expected behavior:
 - `GET /api/export.csv`: CSV export
 - `GET /api/report.md`: manager-ready markdown report download
 - `GET /api/observability/metrics`: in-process tool and guardrail metrics
+- `backend/api/lambda_handler.py`: Lambda entrypoint using Mangum
+- `backend/runtime_config.py`: env and SSM-backed runtime config loader
 
 ## Known Limitations
 
-- SQLite is local-file persistence, not a managed production database.
+- SQLite is the default local dev store. DynamoDB is the intended AWS store.
 - Authentication is simple manager-token auth, not Clerk/Auth0 RBAC.
-- Observability is SQLite audit persistence, not LangSmith, Langfuse, or OpenTelemetry.
+- Observability is store-backed audit persistence, not LangSmith, Langfuse, or OpenTelemetry.
 - Slack can be connected with a real webhook; the other external adapters are still safe integration-shaped stubs.
+- For AWS, secrets can come from SSM parameter names instead of plain env values.
 - The backend MCP layer is a local registry shaped like the production FastMCP boundary.

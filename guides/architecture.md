@@ -30,11 +30,27 @@ The capstone demo needs repeatable behavior for known manager workflows. Determi
 
 ## Data Boundary
 
-`data/complaints.json` seeds the first local SQLite workspace. After startup, complaint reads, CSV import, CSV export, and MCP tools use `data/customer_report_agent.db` by default. This keeps the demo explainable while giving the app persistent local data.
+`data/complaints.json` seeds the first local SQLite workspace. After startup, complaint reads, CSV import, CSV export, and MCP tools use `data/customer_report_agent.db` by default in local development. For AWS deployment, the same store interface can switch to DynamoDB through `STORE_BACKEND=dynamodb`.
 
 ## Real External MCP Connection
 
 `external-slack-mcp` becomes a live external connection when `SLACK_WEBHOOK_URL` is configured. The Slack tool posts an urgent-complaint alert to the webhook. Without the env var, it returns a deterministic "not configured" message for safe demos.
+
+## AWS Deployment Shape
+
+The intended AWS-native architecture is:
+
+```text
+User
+  -> CloudFront
+  -> S3 static frontend
+  -> API Gateway HTTP API
+  -> Lambda FastAPI app using Mangum
+  -> DynamoDB complaints + audit events
+  -> SSM Parameter Store / Secrets Manager
+  -> CloudWatch logs and metrics
+  -> Slack webhook external MCP
+```
 
 ## Production Upgrade Path
 

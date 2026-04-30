@@ -16,6 +16,8 @@ The MCP layer is intentionally broad for the assessment: the project now registe
 
 The current implementation also includes manager login, SQLite complaint persistence, CSV upload/import, persistent audit events, an admin/integration settings panel, and a real Slack webhook path for `external-slack-mcp` when `SLACK_WEBHOOK_URL` is configured.
 
+The repo now also supports the AWS-native backend path: Lambda through Mangum, DynamoDB store support, and Terraform for CloudFront, S3, API Gateway, Lambda, DynamoDB, and secrets configuration.
+
 ## Assessment Pitch
 
 "I built an MCP-architected customer report agent for support managers. The frontend is a Next.js app with chat, voice input, complaint filters, CSV export, report download, an MCP activity panel, admin login, CSV import, integration status cards, and production evidence metrics. The backend is FastAPI and routes each manager request through a registry of 10 named MCP servers: 5 internal complaint-analysis servers and 5 external integration servers. The Slack MCP server can connect to a real incoming webhook, while CRM, ticketing, service-status, and email are safe adapter stubs until credentials are configured. The app uses SQLite for complaint and audit persistence, is tested, documented, and includes guardrails for unsafe prompts."
@@ -102,6 +104,10 @@ For assessment demos, emphasize that the current project already has 5 external 
 - Integration settings panel that shows CRM, ticketing, status page, Slack, and email connection state.
 - Real Slack webhook path for `external-slack-mcp` when `SLACK_WEBHOOK_URL` is set.
 - Typography polish in `frontend/styles/globals.css` with cleaner display and UI font stacks.
+- Lambda handler in `backend/api/lambda_handler.py`.
+- DynamoDB store implementation in `backend/store_dynamodb.py`.
+- Terraform stack for CloudFront, S3, API Gateway, Lambda, DynamoDB, and IAM.
+- Runtime config loader in `backend/runtime_config.py` for env-or-SSM secret resolution.
 
 ## Admin And Data Flow
 

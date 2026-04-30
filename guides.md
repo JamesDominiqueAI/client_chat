@@ -152,8 +152,7 @@ Use these files when explaining production readiness:
 - `guides/deployment.md`: deployment model.
 - `guides/production_ai_chatbot_playbook.md`: production-grade AI chatbot playbook.
 - `backend/tests/test_mcp_tools.py`: test coverage for tools, routing, fallbacks, and guardrails.
-- `.github/workflows/ci-cd.yml`: CI build and backend tests.
-- `.github/workflows/vercel-production.yml`: GitHub production deployment check.
+- `.github/workflows/ci-cd.yml`: CI plus AWS development and production deployment workflow.
 
 ## Verification Commands
 
@@ -246,7 +245,7 @@ State:
 - data now persists in SQLite after being seeded from JSON
 - the MCP layer includes 10 named MCP servers: 5 internal and 5 external
 - manager login, CSV import, integration status, and persistent audit events are implemented
-- deployment target is Vercel frontend plus public backend
+- deployment target is CloudFront + private S3 frontend and API Gateway + Lambda backend
 - priority is reliable MCP tool behavior before optional polish
 
 ## Video 2 Points
@@ -279,8 +278,8 @@ Show in order:
 
 1. GitHub repo.
 2. README with links.
-3. GitHub Actions CI and production check.
-4. Live Vercel frontend.
+3. GitHub Actions CI and AWS deployment pipeline.
+4. Live CloudFront frontend.
 5. Chat prompt for urgent complaints.
 6. Chat prompt for manager report.
 7. Voice `Talk` input.
@@ -303,7 +302,7 @@ Close with:
 - Authentication is simple signed-token manager auth, not Clerk/Auth0/RBAC.
 - Observability is persistent SQLite audit events, not LangSmith/Langfuse/OpenTelemetry.
 - Slack can be connected with `SLACK_WEBHOOK_URL`; CRM, ticketing, status, and email still need real service wiring.
-- The production check links to the current Vercel deployment rather than running Vercel CLI inside GitHub Actions.
+- GitHub Actions handles CI, automatic development deployment on `main`, and manual development or production deployment through AWS.
 
 ## Next Production Improvements
 

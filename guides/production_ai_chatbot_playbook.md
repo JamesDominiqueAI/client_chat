@@ -14,7 +14,7 @@ Use this checklist as the build standard for the project:
 - **Observability:** track trace IDs, latency, tool/source/server metadata, SQLite audit events, and future Langfuse/OpenTelemetry.
 - **Frontend UX:** include chat UX, admin panel, integration health, report downloads, filters, voice input, and polished typography.
 - **Testing:** cover routing, guardrails, MCP counts, exports, auth, imports, and integration status.
-- **Deployment:** describe the current local/Vercel path and the AWS path with Lambda/API Gateway, DynamoDB, Secrets Manager, and CloudWatch.
+- **Deployment:** describe the current local path and the AWS path with CloudFront, S3, Lambda/API Gateway, DynamoDB, Secrets Manager, and CloudWatch.
 - **Demo Script:** provide the exact sequence to show value quickly in a video or interview.
 
 ## 1. Product Scope

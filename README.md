@@ -157,6 +157,43 @@ bash scripts/deploy_aws.sh
 
 That script packages the Lambda, applies the Terraform phases, builds the static frontend with the deployed API URL, uploads it to S3, invalidates CloudFront, and applies monitoring.
 
+## GitHub Actions
+
+The repo now follows the `supplychain-ai` workflow model with a single entrypoint workflow:
+
+- `.github/workflows/ci-cd.yml`
+
+Behavior:
+
+- pull requests run backend tests, frontend build, static export build, and Terraform formatting checks
+- pushes to `main` automatically deploy the `development` GitHub environment to AWS
+- manual `workflow_dispatch` deploys either `development` or `production`
+
+Required GitHub environment secrets:
+
+- `development`
+  - `AWS_ROLE_ARN_DEV`
+  - `DEFAULT_AWS_REGION`
+  - `PROJECT_NAME_DEV`
+  - `COMPLAINTS_TABLE_NAME_DEV`
+  - `AUDIT_TABLE_NAME_DEV`
+  - `MANAGER_PASSWORD_DEV`
+  - `MANAGER_AUTH_SECRET_DEV`
+  - `SLACK_WEBHOOK_URL_DEV`
+  - `ALARM_EMAIL_DEV`
+  - `DEV_API_BASE_URL`
+- `production`
+  - `AWS_ROLE_ARN`
+  - `DEFAULT_AWS_REGION`
+  - `PROJECT_NAME`
+  - `COMPLAINTS_TABLE_NAME`
+  - `AUDIT_TABLE_NAME`
+  - `MANAGER_PASSWORD`
+  - `MANAGER_AUTH_SECRET`
+  - `SLACK_WEBHOOK_URL`
+  - `ALARM_EMAIL`
+  - `PROD_API_BASE_URL`
+
 ## Demo Prompts
 
 - `Summarize today's customer complaints.`
